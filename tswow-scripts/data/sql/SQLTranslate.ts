@@ -1,8 +1,14 @@
 import { isTrinityCore } from "../Settings";
 
 export type TranslateDirection = 'IN'|'OUT'
+export type TranslateContext = 'ROW'|'QUERY'
 
-export function translate(table: string, row: any, direction: TranslateDirection) {
+export function translate(
+    table: string,
+    row: any,
+    direction: TranslateDirection,
+    context: TranslateContext = 'ROW'
+) {
     if(isTrinityCore()) return;
 
     const rename = (from: string, to: string)=>{
@@ -18,13 +24,52 @@ export function translate(table: string, row: any, direction: TranslateDirection
     }
 
     const add_out = (key: string, value: any) => {
-        if(direction === 'OUT') {
+        if(direction === 'OUT' && context === 'ROW') {
             row[key] = value;
         }
     }
 
     const remove_out = (key: string) => {
-        if(direction === 'OUT' && row[key] !== undefined) delete row[key];
+        if(direction !== 'OUT' || row[key] === undefined) return;
+        if(context === 'QUERY') {
+            throw new Error(
+                `AzerothCore does not support querying TSWoW field ${table}.${key}`
+            );
+        }
+        delete row[key];
+    }
+
+    const creatureAddonBytes = () => {
+        const fields = ['StandState','AnimTier','VisFlags','SheathState','PvPFlags'];
+        if(direction === 'IN') {
+            const bytes1 = Number(row.bytes1 || 0) >>> 0;
+            const bytes2 = Number(row.bytes2 || 0) >>> 0;
+            row.StandState = bytes1 & 0xff;
+            row.VisFlags = (bytes1 >>> 16) & 0xff;
+            row.AnimTier = (bytes1 >>> 24) & 0xff;
+            row.SheathState = bytes2 & 0xff;
+            row.PvPFlags = (bytes2 >>> 8) & 0xff;
+            delete row.bytes1;
+            delete row.bytes2;
+            return;
+        }
+        if(context === 'QUERY' && fields.some(key=>row[key] !== undefined)) {
+            throw new Error(
+                `AzerothCore does not support querying individual packed fields on ${table}`
+            );
+        }
+        if(context === 'ROW') {
+            row.bytes1 = (
+                (Number(row.StandState || 0) & 0xff)
+              | ((Number(row.VisFlags || 0) & 0xff) << 16)
+              | ((Number(row.AnimTier || 0) & 0xff) << 24)
+            ) >>> 0;
+            row.bytes2 = (
+                (Number(row.SheathState || 0) & 0xff)
+              | ((Number(row.PvPFlags || 0) & 0xff) << 8)
+            ) >>> 0;
+            fields.forEach(key=>delete row[key]);
+        }
     }
 
     switch(table) {
@@ -52,12 +97,14 @@ export function translate(table: string, row: any, direction: TranslateDirection
             break;
         case 'creature_addon':
             remove_out('MountCreatureID')
+            creatureAddonBytes();
             break;
         case 'creature_summon_groups':
             remove_out('Comment')
             break;
         case 'creature_template_addon':
             remove_out('MountCreatureID')
+            creatureAddonBytes();
             break;
         case 'npc_text':
             for(let x = 0; x <= 7; ++x) {
@@ -65,6 +112,15 @@ export function translate(table: string, row: any, direction: TranslateDirection
                     rename(`em${x}_${y}`,`Emote${x}_${y}`)
                     remove_out(`EmoteDelay${x}_${y}`)
                 }
+            }
+            break;
+        case 'item_template':
+            if(direction === 'IN') {
+                row.StatsCount = Array.from({length:10},(_,index)=>index+1)
+                    .filter(index=>Number(row[`stat_type${index}`] || 0) !== 0)
+                    .length;
+            } else {
+                remove_out('StatsCount');
             }
             break;
         case 'player_factionchange_items':
@@ -154,6 +210,9 @@ export function translate(table: string, row: any, direction: TranslateDirection
             break;
         case 'points_of_interest':
             remove_out('VerifiedBuild')
+            break;
+        case 'quest_template':
+            rename('RewardMoneyDifficulty','RewardBonusMoney');
             break;
     }
 }

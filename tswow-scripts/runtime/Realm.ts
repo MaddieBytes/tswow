@@ -281,7 +281,11 @@ export class Realm {
         this.config.Dataset.writeModulesTxt()
 
         // Generate .conf files
-        ipaths.bin.core.pick(this.config.Dataset.config.EmulatorCore).build.pick(type)
+        const coreBuild = ipaths.bin.core.pick(this.config.Dataset.config.EmulatorCore).build.pick(type);
+        const configSource = this.core === 'azerothcore'
+            ? coreBuild.configs
+            : coreBuild;
+        configSource
             .iterate('FLAT','FILES','FULL',node=>{
                 if(!node.endsWith('.conf.dist')) return;
                 if(node.endsWith('authserver.conf.dist')) {
@@ -291,6 +295,22 @@ export class Realm {
                 node.copy(this.path.join(fname))
                 node.copyOnNoTarget(this.path.join(fname.substring(0,fname.length-'.dist'.length)))
             });
+
+        if(this.core === 'azerothcore') {
+            const moduleConfigs = coreBuild.configs.join('modules');
+            if(moduleConfigs.exists()) {
+                moduleConfigs.iterate('FLAT','FILES','FULL',node=>{
+                    const fname = node.basename();
+                    const target = this.path.join('configs','modules',fname);
+                    node.copy(target);
+                    if(fname.endsWith('.conf.dist')) {
+                        node.copyOnNoTarget(this.path.join(
+                            'configs','modules',fname.substring(0,fname.length-'.dist'.length)
+                        ));
+                    }
+                });
+            }
+        }
 
         patchTCConfig(
               this.path.worldserver_conf.get()
@@ -327,16 +347,27 @@ export class Realm {
             patchTCConfig(this.path.worldserver_conf.get(), 'HotSwap.EnablePrefixCorrection',0)
         }
 
-        patchTCConfig(this.path.worldserver_conf.get(), 'Updates.EnableDatabases', 0)
+        patchTCConfig(
+            this.path.worldserver_conf.get(),
+            'Updates.EnableDatabases',
+            this.core === 'azerothcore' ? 7 : 0
+        )
         patchTCConfig(this.path.worldserver_conf.get(), 'Updates.AutoSetup', 0)
         patchTCConfig(this.path.worldserver_conf.get(), 'Updates.Redundancy', 0)
         patchTCConfig(this.path.worldserver_conf.get(), 'RealmID',this.getID())
         patchTCConfig(this.path.worldserver_conf.get(), 'DataDir',this.config.Dataset.path.abs().get())
 
+        if(this.core === 'azerothcore') {
+            const moduleConfig = this.path.join('configs','modules','mod-tswow.conf');
+            patchTCConfig(moduleConfig.get(), 'TSWoW.LivescriptDir', this.config.Dataset.path.lib.abs().get());
+            patchTCConfig(moduleConfig.get(), 'TSWoW.LuaDir', this.config.Dataset.path.lib.lua.abs().get());
+        }
+
         this.worldserver.setAutoRestart(this.config.AutoRestart);
 
         switch(this.core) {
             case 'trinitycore':
+            case 'azerothcore':
                 this.worldserver.startIn(this.path.get(),
                     wfs.absPath(ipaths.bin.core.pick(this.config.Dataset.config.EmulatorCore).build.pick(type).worldserver.get()),
                         [`-c${wfs.absPath(this.path.worldserver_conf.get())}`]);

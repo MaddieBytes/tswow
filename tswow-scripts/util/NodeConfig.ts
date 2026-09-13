@@ -91,6 +91,15 @@ export class NodeConfigClass extends ConfigFile {
     })
     AutoStartRealms!: string[]
 
+    @Section("AzerothCore")
+
+    @Property({
+        name: 'AzerothCore.SourceDirectory'
+      , description: 'Path to the AzerothCore source checkout used for database initialization'
+      , examples: [['C:\\dev\\azerothcore-wotlk','']]
+    })
+    AzerothCoreSourceDirectory!: string
+
     @Section("Database")
 
     @Property({

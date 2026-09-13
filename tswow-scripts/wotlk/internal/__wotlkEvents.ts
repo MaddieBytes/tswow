@@ -17,6 +17,7 @@
 import { DBCFile } from '../../data/dbc/DBCFile';
 import { BuildArgs, dataset } from '../../data/Settings';
 import { SqlConnection } from '../../data/sql/SQLConnection';
+import { applyAzerothCoreAdapters } from '../../data/sql/AzerothCoreAdapters';
 import { SqlTable } from '../../data/sql/SQLTable';
 import { WFile } from '../../util/FileTree';
 import { DBCFiles } from '../DBCFiles';
@@ -55,6 +56,7 @@ async function saveSQL() {
         SqlTable.writeSQL(x);
     })
     await Promise.all(SqlConnection.allDbs().map(x=>x.apply()));
+    applyAzerothCoreAdapters();
 }
 
 export async function __internal_wotlk_save() {

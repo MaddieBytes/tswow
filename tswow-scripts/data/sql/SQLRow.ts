@@ -95,8 +95,25 @@ export abstract class SqlRow<C, Q> extends Row<C, Q> {
         return Object.assign({}, this.obj);
     }
 
+    private physicalObject() {
+        const obj = this.objectify();
+        Object.keys(obj).forEach(key=>{
+            if(obj[key] === undefined) delete obj[key];
+        });
+        translate(this.table.name,obj,'OUT');
+        return obj;
+    }
+
+    private physicalPrimaryKeys() {
+        const obj: {[key: string]: any} = {};
+        const values = this.primaryKeys();
+        Row.primaryKeyFields(this).forEach((key,index)=>obj[key] = values[index]);
+        translate(this.table.name,obj,'OUT','QUERY');
+        return obj;
+    }
+
     protected _generatePreparedDeleteStatement() {
-        const pkFields: string[] = Row.primaryKeyFields(this);
+        const pkFields = Object.keys(this.physicalPrimaryKeys());
         const text = `DELETE FROM ${this.table.name} WHERE `
         + `${pkFields.map((x)=>{
             return `${x} = ?`
@@ -105,18 +122,18 @@ export abstract class SqlRow<C, Q> extends Row<C, Q> {
     }
 
     protected _generatePreparedStatement() {
-        const obj = this.objectify();
+        const obj = this.physicalObject();
         return `REPLACE INTO ${this.table.name} ` +
             `(${Object.keys(obj).map(x=>`\`${x}\``).join(',')}) ` +
             `VALUES (${Object.values(obj).map(() => '?')})`
     }
 
     protected _getPreparedStatements() {
-        return Object.values(this.objectify())
+        return Object.values(this.physicalObject())
     }
 
     protected _getPreparedDeleteValues() {
-        return this.primaryKeys();
+        return Object.values(this.physicalPrimaryKeys());
     }
 
     static generatePreparedStatement(row: SqlRow<any,any>) {
@@ -136,8 +153,7 @@ export abstract class SqlRow<C, Q> extends Row<C, Q> {
     }
 
     protected generateSql() {
-        const obj = this.objectify();
-        translate(this.table.name,obj,'OUT')
+        const obj = this.physicalObject();
         for(let key in obj) {
             if(typeof(obj[key]) == 'string') {
                 obj[key] = obj[key].split('\\').join('\\\\').split('"').join('\\"')

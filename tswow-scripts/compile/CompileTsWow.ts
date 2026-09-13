@@ -22,6 +22,7 @@ import { term } from '../util/Terminal';
 import { setContext } from '../util/TSWoWContext';
 import { SevenZipInstall } from './7Zip';
 import { ADTCreator } from './ADTCreator';
+import { AzerothCore } from './AzerothCore';
 import { BLPConverter } from './BLPConverter';
 import { Boost } from './Boost';
 import { isInteractive } from './BuildConfig';
@@ -41,6 +42,26 @@ setContext('build');
 let buildingScripts = false;
 
 async function compile(type: string, compileArgs: string[]) {
+    if(type === 'runtime') {
+        let runtimeCMake: string;
+        const getRuntimeCMake = async () => runtimeCMake ||
+            (runtimeCMake = isWindows() ? (await CMake.find()).get() : 'cmake');
+        await NodeJS.install();
+        await MySQL.find();
+        if(!ipaths.bin.mpqbuilder.luaxml_exe.exists()) {
+            await Boost.install();
+            await MPQBuilder.create(await getRuntimeCMake());
+        }
+        if(!ipaths.bin.BLPConverter.blpconverter.exists()) {
+            await BLPConverter.install(await getRuntimeCMake());
+        }
+        await Scripts.build();
+        AzerothCore.installExisting('RelWithDebInfo');
+        await Config.create('azerothcore');
+        term.log('build','Installation successful!');
+        return;
+    }
+
     // Load necessary libraries
     const types = type.split(' ');
     function isType(check: string) {
@@ -115,6 +136,7 @@ async function main() {
             , 'release'
             , 'adtcreator'
             , 'client-extensions'
+            , 'runtime'
         ];
 
     for (const val of installedPrograms) {
@@ -138,6 +160,11 @@ async function main() {
 
     if(Args.hasFlag('gdts-only', [process.argv])) {
         TrinityCore.headers(true);
+        process.exit(0);
+    }
+
+    if(Args.hasFlag('runtime-only', [process.argv])) {
+        await compile('runtime',[]);
         process.exit(0);
     }
 

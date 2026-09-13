@@ -306,6 +306,7 @@ export function InstallPath(pathIn: string, tdb: string) {
             addons: dir({}),
             revisions: dir({
                 trinitycore: file('trinitycore'),
+                azerothcore: file('azerothcore'),
                 tswow: file('tswow'),
             }),
             scripts: dir({
@@ -345,10 +346,10 @@ export function InstallPath(pathIn: string, tdb: string) {
                 mpqbuilder_exe: file(`mpqbuilder${isWindows()?'.exe':''}`),
                 luaxml_exe: file(`luaxmlreader${isWindows()?'.exe':''}`)
             }),
-            mysql: dir({
-                mysql_exe: file('mysql.exe'),
-                mysqld_exe: file('mysqld.exe'),
-                mysqldump_exe: file('mysqldump.exe'),
+            mysql: dirn('mysql-server',{
+                mysql_exe: file('bin/mysql.exe'),
+                mysqld_exe: file('bin/mysqld.exe'),
+                mysqldump_exe: file('bin/mysqldump.exe'),
             }),
             sZip: dirn('7zip',{
                 sza_exe: file('7za.exe')
@@ -424,14 +425,14 @@ export function InstallPath(pathIn: string, tdb: string) {
                         modulePdb: dynfile(mod=>`${wfs.dirname(mod)}/scripts_tswow_${wfs.basename(mod)}.pdb`)
                     }),
                     worldserver: file(`worldserver${isWindows()?'.exe':''}`),
-                    mapextractor: file(`mapextractor${isWindows()?'.exe':''}`),
+                    mapextractor: file(`${core==='azerothcore'?'map_extractor':'mapextractor'}${isWindows()?'.exe':''}`),
                     mmaps_generator: file(`mmaps_generator${isWindows()?'.exe':''}`),
-                    vmap4assembler: file(`vmap4assembler${isWindows()?'.exe':''}`),
-                    vmap4extractor: file(`vmap4extractor${isWindows()?'.exe':''}`),
+                    vmap4assembler: file(`${core==='azerothcore'?'vmap4_assembler':'vmap4assembler'}${isWindows()?'.exe':''}`),
+                    vmap4extractor: file(`${core==='azerothcore'?'vmap4_extractor':'vmap4extractor'}${isWindows()?'.exe':''}`),
                     authserver: file(`authserver${isWindows()?'.exe':''}`),
                     tracy_client: file(`TracyClient.dll`),
-                    authserver_conf_dist: file(`authserver.conf.dist`),
-                    worldserver_conf_dist: file(`worldserver.conf.dist`),
+                    authserver_conf_dist: file(`${core==='azerothcore'?'configs/':''}authserver.conf.dist`),
+                    worldserver_conf_dist: file(`${core==='azerothcore'?'configs/':''}worldserver.conf.dist`),
 
                     libcrypto: file('libcrypto-1_1-x64.dll'),
                     configs: custom((i)=>generateTree(i,dir({}))),
@@ -529,13 +530,13 @@ export function BuildPaths(pathIn: string, tdb: string) {
         }),
 
         cmakeArchive: file('cmake-3.25.0-win64-x64.zip'),
-        mysqlArchive: file('mysql-5.7.32-winx64.zip'),
+        mysqlArchive: file('mysql-8.4.11-winx64.zip'),
         nodeArchive: file('node-v20.18.0-win-x64.zip'),
         node: dirn('node-v20.18.0-win-x64',{}),
 
         sourceAdt: file('source.adt'),
 
-        mysql: dir({
+        mysql: dirn('mysql-8.4.11',{
             find_subdir: function() {
                 return generateTree(path.join(this.get(),fs.readdirSync(this.get())[0]),dir({
                     bin: dir({

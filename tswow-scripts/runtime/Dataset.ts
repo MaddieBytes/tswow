@@ -1,6 +1,6 @@
 import { patchTCConfig } from "../util/ConfigFile";
 import { DatasetConfig, GAME_BUILD_FIELD } from "../util/DatasetConfig";
-import { wfs } from "../util/FileSystem";
+import { mpath, wfs } from "../util/FileSystem";
 import { ipaths } from "../util/Paths";
 import { term } from "../util/Terminal";
 import { termCustom } from "../util/TerminalCategories";
@@ -101,9 +101,14 @@ export class Dataset {
             +  `;`
     }
 
-    async setupClientData() {
+    async setupClientData(dbcOnly: boolean = false) {
         term.debug(this.logName(), `Setting up client data`)
         let anyChange: boolean = false;
+
+        if(!this.path.dbc_source.exists()) {
+            MapData.dbc(this);
+        }
+
         if(!this.path.luaxml_source.exists()) {
             MapData.luaxml(this);
             anyChange = true;
@@ -111,9 +116,7 @@ export class Dataset {
 
         this.path.luaxml_source.copyOnNoTarget(this.path.luaxml)
 
-        if(!this.path.dbc_source.exists()) {
-            MapData.dbc(this);
-        }
+        if(dbcOnly) return;
 
         if(!this.path.maps.exists()) {
             MapData.map(this);
@@ -139,7 +142,7 @@ export class Dataset {
                     .map(x=>x.worldserver.isRunning() ? x.worldserver.stop() : undefined)
             }
 
-            let worldSql: string;
+            let worldSql: string|undefined;
             if(this.path.world_sql.exists()) {
                 worldSql = this.path.world_sql.abs().get()
             } else {
@@ -148,14 +151,23 @@ export class Dataset {
                         worldSql = ipaths.bin.tdb.get()
                         break;
                     }
+                    case 'azerothcore': {
+                        await mysql.rebuildDatabaseFromDirectory(
+                              db
+                            , mpath(NodeConfig.AzerothCoreSourceDirectory,'data/sql/base/db_world'));
+                        break;
+                    }
                 }
             }
-            await mysql.rebuildDatabase(db,worldSql)
+            if(worldSql) await mysql.rebuildDatabase(db,worldSql)
         }
 
         switch(this.config.EmulatorCore) {
             case 'trinitycore':
                 await mysql.applySQLFiles(db,'world');
+                break;
+            case 'azerothcore':
+                await mysql.applyAzerothCoreModuleBaseSQL(db,'world');
                 break;
         }
     }

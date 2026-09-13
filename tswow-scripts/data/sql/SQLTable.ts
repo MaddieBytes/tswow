@@ -17,7 +17,7 @@
 import { inMemory } from '../query/Query';
 import { Row } from '../table/Row';
 import { Table } from '../table/Table';
-import { SqlConnection } from './SQLConnection';
+import { PreparedStatement, SqlConnection } from './SQLConnection';
 import { SqlRow } from './SQLRow';
 
 export type SqlRowCreator<C, Q, R extends SqlRow<C, Q>> = (table: SqlTable<C, Q, R>, obj: {[key: string]: any}) => R;
@@ -120,33 +120,19 @@ export class SqlTable<C, Q, R extends SqlRow<C, Q>> extends Table<C, Q, R> {
     }
 
     static writeSQL(table: SqlTable<any,any,any>) {
-        // Very stupid
-        let dummyRow: SqlRow<any,any>
-        for(let row in table.cachedRows) {
-            dummyRow = table.cachedRows[row];
-            break;
-        }
-        if(!dummyRow) {
-            return;
-        }
+        const statements: {[query: string]: PreparedStatement} = {};
+        const statement = (query: string) =>
+            statements[query] || (statements[query] = SqlConnection.world_dst.prepare(query));
 
-        const normalQuery = SqlRow.generatePreparedStatement(dummyRow);
-        const deleteQuery = SqlRow.generatePreparedDeleteStatement(dummyRow);
-
-        let normalStatement = SqlConnection.world_dst.prepare(normalQuery)
-        let deleteStatement = SqlConnection.world_dst.prepare(deleteQuery)
-
-        SqlConnection.world_dst.prepare(table.rowCreator(table,{}))
-
-        let values = table.cachedValues.filter(SqlRow.isDirty)
-
-        values.forEach((x: SqlRow<any,any>)=>{
-                if(x.isDeleted()) {
-                    deleteStatement.writeNormal(SqlRow.getPreparedDeleteStatement(x))
+        table.cachedValues.filter(SqlRow.isDirty)
+            .forEach((row: SqlRow<any,any>)=>{
+                if(row.isDeleted()) {
+                    statement(SqlRow.generatePreparedDeleteStatement(row))
+                        .writeNormal(SqlRow.getPreparedDeleteStatement(row));
                 } else {
-                    normalStatement.writeNormal(SqlRow.getPreparedStatement(x))
+                    statement(SqlRow.generatePreparedStatement(row))
+                        .writeNormal(SqlRow.getPreparedStatement(row));
                 }
-                //SqlConnection.world_dst.write(SqlRow.getSql(x))
             });
         table.cachedRows = {};
     }

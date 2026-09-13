@@ -70,11 +70,10 @@ export namespace AuthServer {
 
     export async function initializeDatabase() {
         term.debug('authserver', `Initializing authserver database`)
-        if(NodeConfig.AutoStartAuthServer) {
-            connection = new Connection(NodeConfig.DatabaseSettings('auth'),'auth');
-            await connection.connect();
-            await mysql.installAuth(connection);
-        }
+        connection = new Connection(NodeConfig.DatabaseSettings('auth'),'auth');
+        await connection.connect();
+        const core = Dataset.all()[0]?.config.EmulatorCore || 'azerothcore';
+        await mysql.installAuth(connection,core);
     }
 
     export async function initializeServer() {

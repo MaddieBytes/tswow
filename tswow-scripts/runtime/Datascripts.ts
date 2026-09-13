@@ -239,6 +239,7 @@ export class Datascripts {
               'datascripts'
             , 'dataset '
             + '--(client|server|inline)-only'
+            + ' --dbc-only'
             + ' --readonly'
             + ' --rebuild'
             + ' --no-shutdown(-server|-client|)'
@@ -345,14 +346,14 @@ export class Datascripts {
         await Promise.all(runningClients.map(x=>x.kill()));
 
         // 5. Prepare dataset
-        await dataset.setupClientData();
+        await dataset.setupClientData(args.includes('--dbc-only'));
         if(args.includes('--rebuild')) {
             await dataset.setupDatabases('SOURCE',false);
             await dataset.setupDatabases('DEST',true);
         } else {
             await dataset.setupDatabases('BOTH', false);
         }
-        dataset.refreshSymlinks();
+        if(writesClient) dataset.refreshSymlinks();
         dataset.modules().forEach(endpoint=>{
             if(endpoint.datascripts.path.exists()) {
                 endpoint.datascripts.compile();

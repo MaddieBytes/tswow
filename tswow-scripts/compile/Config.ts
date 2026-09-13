@@ -21,11 +21,14 @@ import { wsys } from '../util/System';
 import { term } from '../util/Terminal';
 import { bpaths, spaths } from './CompilePaths';
 import { TrinityCore } from './TrinityCore';
+import { EmulatorCore } from '../util/EmulatorCore';
 
 export namespace Config {
 
-    export async function create() {
+    export async function create(core: EmulatorCore = 'trinitycore') {
         term.log('build','Creating config files');
+        const node = isWindows() ? ipaths.bin.node.node_exe.abs().get() : 'node';
+        const tstl = `"${node}" "${ipaths.node_modules.tstl_js.abs().get()}"`;
 
         // Create node package
         const package_json = {
@@ -54,7 +57,9 @@ export namespace Config {
 
         ipaths.modules.mkdir();
 
-        spaths.tswow_core.Public.global_d_ts
+        ;(core === 'azerothcore'
+            ? spaths.tswow_scripts.wotlk.global_d_ts
+            : spaths.tswow_core.Public.global_d_ts)
             .copy(ipaths.bin.include.global_d_ts)
 
         spaths.misc.install_config.vscode_install
@@ -63,12 +68,14 @@ export namespace Config {
         new NodeConfigClass(ipaths.node_conf.get()).generateIfNotExists();
 
         spaths.misc.install_config.addons.copy(ipaths.bin.addons);
-        spaths.cores.TrinityCore.sql.updates.copy(ipaths.bin.sql.updates)
-        spaths.cores.TrinityCore.sql.custom.copy(ipaths.bin.sql.custom)
+        if(core === 'trinitycore') {
+            spaths.cores.TrinityCore.sql.updates.copy(ipaths.bin.sql.updates)
+            spaths.cores.TrinityCore.sql.custom.copy(ipaths.bin.sql.custom)
+        }
 
         // Serverside lua includes
         spaths.misc.install_config.include_lua.copy(bpaths.include_lua),
-        wsys.execIn(bpaths.include_lua,'tstl')
+        wsys.execIn(bpaths.include_lua,tstl)
         bpaths.include_lua.iterate('RECURSE','FILES','FULL', node => {
             if(['.ts','.json'].find(x=>node.endsWith(x))) {
                 return;
@@ -97,7 +104,7 @@ export namespace Config {
                 "noImplicitSelf": true,
             }
         })
-        wsys.execIn(bpaths.lua_events, 'tstl')
+        wsys.execIn(bpaths.lua_events,tstl)
         bpaths.lua_events.events_lua.copy(
             ipaths.bin.include_addon.Events_lua)
         bpaths.lua_events.lualib_bundle.copy(
@@ -157,7 +164,7 @@ export namespace Config {
             })
         })
 
-        TrinityCore.headers(false);
+        if(core === 'trinitycore') TrinityCore.headers(false);
         spaths.misc.install_config.snippet_example.copy(ipaths.vscode.snippets_out)
 
         let commit = wsys.exec('git rev-parse HEAD','pipe').split('\n').join('');

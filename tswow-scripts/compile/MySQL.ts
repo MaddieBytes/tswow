@@ -38,14 +38,8 @@ export namespace MySQL {
         // Delete unused library
         bpaths.mysql.find_subdir().lib.mysqlserver_lib.remove();
 
-        // Install the necessary mysql files
-        ;[
-              bpaths.mysql.find_subdir().bin.mysql_exe
-            , bpaths.mysql.find_subdir().bin.mysqld_exe
-            , bpaths.mysql.find_subdir().bin.mysqldump_exe
-        ].forEach(x=>{
-            x.copyOnNoTarget(ipaths.bin.mysql.join(x.basename()))
-        })
+        // MySQL 8 needs files outside bin (DLLs, messages, and charsets).
+        bpaths.mysql.find_subdir().copy(ipaths.bin.mysql)
 
         if(CLEAR_ARCHIVES) {
             bpaths.mysqlArchive.remove();

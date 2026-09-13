@@ -19,7 +19,7 @@ import path from 'path';
 import { start } from 'repl';
 import { commands } from '../util/Commands';
 import { EmulatorCore } from '../util/EmulatorCore';
-import { wfs } from '../util/FileSystem';
+import { mpath, wfs } from '../util/FileSystem';
 import { WDirectory } from '../util/FileTree';
 import { DatabaseSettings, DatabaseType } from '../util/NodeConfig';
 import { ipaths } from '../util/Paths';
@@ -207,8 +207,8 @@ export namespace mysql {
             try {
                 wsys.exec(
                     `${ipaths.bin.mysql.mysqld_exe.get()}`
-                    + ` --initialize`
-                    + ` --log_syslog=0`
+                    + ` --initialize-insecure`
+                    + ` --basedir=${ipaths.bin.mysql.abs()}`
                     + ` --datadir=${ipaths.coredata.database.abs()}`);
             } catch(error) {
                 term.error('mysql',`Failed to start MySQL: ${error.message}`)
@@ -261,8 +261,8 @@ export namespace mysql {
         mysqlprocess.start(ipaths.bin.mysql.mysqld_exe.get(),
             [
                 `--port=${NodeConfig.DatabaseHostedPort}`,
-                '--log_syslog=0',
                 '--console',
+                `--basedir=${wfs.absPath(ipaths.bin.mysql.get())}`,
                 '--wait-timeout=2147483',
                 '--wait_timeout=2147483',
                 `--init-file=${wfs.absPath(ipaths.bin.mysql_startup.get())}`,
@@ -270,7 +270,7 @@ export namespace mysql {
             ]);
         mysqlprocess.showOutput(process.argv.includes('logmysql'));
         let val = await Promise.race([
-            mysqlprocess.waitForMessage('Execution of init_file*ended.', true),
+            mysqlprocess.waitForMessage('ready for connections', true),
             mysqlprocess.waitForMessage('Can\'t start server', true),
         ]);
         if(val.includes('Can\'t start server')) {
@@ -376,6 +376,62 @@ export namespace mysql {
         term.success('mysql',`Rebuilt database ${con.name()}`);
     }
 
+    /** Rebuilds a database from the sorted SQL files in an AzerothCore base directory. */
+    export async function rebuildDatabaseFromDirectory(
+          con: Connection
+        , sqlDirectoryPath: string)
+    {
+        const directory = new WDirectory(sqlDirectoryPath);
+        if(!directory.exists()) {
+            throw new Error(`AzerothCore SQL directory does not exist: ${directory.abs().get()}`);
+        }
+
+        term.log('mysql',`Rebuilding database ${con.name()} from ${directory.abs().get()}`);
+        await con.clean();
+
+        const files: string[] = [];
+        directory.iterate('FLAT','FILES','FULL',node=>{
+            if(node.endsWith('.sql')) files.push(node.get());
+        });
+
+        for(const file of files.sort()) {
+            await importSQLFile(con,file);
+        }
+        term.success('mysql',`Rebuilt database ${con.name()}`);
+    }
+
+    async function importSQLFile(con: Connection, sqlFilePath: string) {
+        const mysqlCommand = mysql.hasOwnProcess() ?
+            `"${ipaths.bin.mysql.mysql_exe.get()}"` :
+                NodeConfig.MySQLExecutable != '' ?
+            `"${NodeConfig.MySQLExecutable}"`:
+                `mysql`;
+
+        await wsys.execAsync(
+              `${mysqlCommand}`
+            + ` -u ${con.cfg.user}`
+            + ` --default-character-set=utf8`
+            + (con.cfg.password.length > 0 ? ` -p${con.cfg.password}` : '')
+            + ` --port ${con.cfg.port}`
+            + ` --host ${con.cfg.host}`
+            + ` ${con.name()} < "${wfs.absPath(sqlFilePath)}"`);
+    }
+
+    /** Applies idempotent base SQL supplied by installed AzerothCore modules. */
+    export async function applyAzerothCoreModuleBaseSQL(
+          con: Connection
+        , type: 'world'|'auth'|'characters')
+    {
+        const modules = new WDirectory(mpath(NodeConfig.AzerothCoreSourceDirectory,'modules'));
+        const marker = `/data/sql/db-${type}/base/`;
+        const files: string[] = [];
+        modules.iterate('RECURSE','FILES','FULL',node=>{
+            const normalized = node.get().split('\\').join('/');
+            if(node.endsWith('.sql') && normalized.includes(marker)) files.push(node.get());
+        });
+        for(const file of files.sort()) await importSQLFile(con,file);
+    }
+
     async function makeUpdate(cons: Connection, node: WDirectory) {
         let files: string[] = []
         let total = 0
@@ -432,6 +488,11 @@ export namespace mysql {
                 case 'trinitycore':
                     await connection.query(ipaths.bin.sql.characters_create_sql.readString());
                     break;
+                case 'azerothcore':
+                        await rebuildDatabaseFromDirectory(
+                          connection
+                        , mpath(NodeConfig.AzerothCoreSourceDirectory,'data/sql/base/db_characters'));
+                    break;
             }
         }
 
@@ -442,7 +503,7 @@ export namespace mysql {
         }
     }
 
-    export async function installAuth(connection: Connection) {
+    export async function installAuth(connection: Connection, core: EmulatorCore = 'trinitycore') {
         let authRowCount =
             await connection.query('SHOW TABLES; SELECT FOUND_ROWS()');
         if(authRowCount[1][0]['FOUND_ROWS()']===0) {
@@ -450,9 +511,19 @@ export namespace mysql {
               `No auth tables found for ${connection.cfg.database},`
             + ` creating them...`);
 
-            await connection.query(wfs.read(ipaths.bin.sql.auth_create_sql.get()));
+            switch(core) {
+                case 'trinitycore':
+                    await connection.query(wfs.read(ipaths.bin.sql.auth_create_sql.get()));
+                    break;
+                case 'azerothcore':
+                        await rebuildDatabaseFromDirectory(
+                          connection
+                        , mpath(NodeConfig.AzerothCoreSourceDirectory,'data/sql/base/db_auth'));
+                    break;
+            }
         }
-        await applySQLFiles(connection,'auth');
+        if(core === 'trinitycore') await applySQLFiles(connection,'auth');
+        else await applyAzerothCoreModuleBaseSQL(connection,'auth');
     }
 
     export async function initialize() {

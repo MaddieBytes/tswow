@@ -18,6 +18,7 @@ import { watchTsc } from '../util/CompileTS';
 import { mpath, wfs } from '../util/FileSystem';
 import { FilePath, resfp } from '../util/FileTree';
 import { ipaths } from '../util/Paths';
+import { isWindows } from '../util/Platform';
 import { wsys } from '../util/System';
 import { termCustom } from '../util/TerminalCategories';
 import { isInteractive } from './BuildConfig';
@@ -48,7 +49,11 @@ export namespace Scripts {
             )
 
             if(!isInteractive) {
-                wsys.execIn(buildDir,'tsc','inherit')
+                const node = isWindows() ? ipaths.bin.node.node_exe.abs().get() : 'node';
+                wsys.execIn(
+                      buildDir
+                    , `"${node}" "${spaths.node_modules.typescript_js.abs().get()}"`
+                    , 'inherit')
             } else {
                 watchTsc(
                       'node'

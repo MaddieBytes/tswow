@@ -245,7 +245,9 @@ export class SqlConnection {
     }
 
     static getRows<C, Q, T extends SqlRow<C, Q>>(table: SqlTable<C, Q, T>, where: Q, first: boolean) {
-        const whereSql = queryToSql(where, false);
+        const physicalWhere = Object.assign({}, where);
+        translate(table.name,physicalWhere,'OUT','QUERY');
+        const whereSql = queryToSql(physicalWhere, false);
         const whereLookup = whereSql + first;
 
         // Check cache for the query, don't repeat
