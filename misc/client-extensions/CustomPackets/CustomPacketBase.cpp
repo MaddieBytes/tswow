@@ -69,7 +69,6 @@ void CustomPacketBase::Reset()
     m_chunk = 0;
     m_idx = 0;
     m_global_idx = 0;
-    m_size = 0;
 }
 
 void CustomPacketBase::Destroy()
@@ -79,6 +78,7 @@ void CustomPacketBase::Destroy()
         chunk.Destroy();
     }
     m_chunks.clear();
+    m_size = 0;
     Reset();
 }
 
@@ -273,6 +273,7 @@ char* CustomPacketBase::ReadBytes(totalSize_t size, bool padStr)
 void CustomPacketBase::Clear()
 {
     m_chunks.clear();
+    m_size = 0;
     Reset();
 }
 

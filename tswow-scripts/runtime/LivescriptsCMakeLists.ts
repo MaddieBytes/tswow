@@ -12,12 +12,9 @@ ${!isWindows()?'set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-undefined")':''}
 
 project(${buildModule})
 
-# Core settings
-file (GLOB libs "${
-    emu === 'trinitycore'
-        ? ipaths.bin.libraries.build.pick(buildType).abs('FORWARD')
-        : ipaths.bin.libraries_ac.build.pick(buildType).abs('FORWARD')
-}/${(isWindows()?'*.lib':'*.so')}")
+${emu === 'trinitycore' ? `# TrinityCore libraries provide the legacy wrapper implementation.
+file (GLOB libs "${ipaths.bin.libraries.build.pick(buildType).abs('FORWARD')}/${(isWindows()?'*.lib':'*.so')}")` :
+`# AzerothCore wrappers call the mod-tswow function table and require no core libraries.`}
 
 # borrowed by tswow from https://stackoverflow.com/a/46003179
 function (filter_items aItems aRegEx)
@@ -53,9 +50,8 @@ filter_items(source_files "build/cpp/../../build/cpp")
 filter_items(source_files "/lib/")
 
 add_library(${buildModule} SHARED \${transpiler_files} \${source_files})
-target_link_libraries(${buildModule} \${libs})
+${emu === 'trinitycore' ? `target_link_libraries(${buildModule} \${libs})` : ''}
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-target_compile_definitions(${buildModule} PUBLIC "TRINITY=1")
 
 source_group("Transpiled" FILES \${transpiler_files})
 source_group("Source" FILES \${source_files})

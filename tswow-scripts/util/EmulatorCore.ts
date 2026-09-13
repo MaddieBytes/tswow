@@ -1,1 +1,1 @@
-export type EmulatorCore = 'trinitycore'
+export type EmulatorCore = 'trinitycore'|'azerothcore'

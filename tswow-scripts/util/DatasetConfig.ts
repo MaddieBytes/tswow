@@ -122,6 +122,7 @@ export class DatasetConfig extends ConfigFile {
         , description: 'What emulator base to use for this dataset'
         , examples: [
             ['trinitycore','']
+            , ['azerothcore','']
         ]
     })
     EmulatorCore: EmulatorCore = this.undefined()
