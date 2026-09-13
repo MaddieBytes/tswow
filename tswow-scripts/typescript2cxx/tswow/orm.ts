@@ -30,7 +30,6 @@ export function handleClassImpl(node: ts.ClassDeclaration, writer: CodeWriter) {
     writer.writeString(entry.createDatabaseSpec('c++')+';')
     writer.writeStringNewLine('return 0;');
     writer.EndBlock()
-    writer.writeStringNewLine(`volatile int ${entry.className}_load_dummy = ${entry.className}::__CreateTable();`);
 
     // Load
     writer.writeStringNewLine()
@@ -151,24 +150,13 @@ export function handleClassImpl(node: ts.ClassDeclaration, writer: CodeWriter) {
         case 'DBArrayEntry':
             writer.writeStringNewLine(`if(this->__index == 0)`)
             writer.BeginBlock()
-            writer.writeStringNewLine(
-                `auto con = Get${entry.dbCallName()}DBConnection();`
-            )
-            writer.writeString(`${entry.className}_SaveStatement->Create()`);
-            writer.writeString('\n'+entry.saveFields(12,'c++'))
-            writer.writeStringNewLine(`            ->Send(con);`);
-            writer.writeStringNewLine(
-                `auto res = con->Query("SELECT LAST_INSERT_ID();");`)
+            writer.writeStringNewLine(`auto res = Query${entry.dbCallName()}("SELECT UUID_SHORT();");`)
             writer.writeStringNewLine(`res->GetRow();`)
-            writer.writeStringNewLine(`this->__index = res->GetUInt64(0);`)
-            writer.writeStringNewLine(`con->Unlock();`);
+            writer.writeStringNewLine(`this->__index = res->GetUInt64Raw(0);`)
             writer.EndBlock()
-            writer.writeStringNewLine(`else`)
-            writer.BeginBlock()
             writer.writeString(`${entry.className}_SaveStatement->Create()`);
-            writer.writeString('\n'+entry.saveFields(12,'c++'))
-            writer.writeStringNewLine(`            ->Send();`);
-            writer.EndBlock()
+            writer.writeString('\n'+entry.saveFields(8,'c++'))
+            writer.writeStringNewLine(`        ->Send();`);
             writer.EndBlock();
             break;
         default: throw new Error(`Invalid TableType: ${entry.tableType}`)
@@ -277,7 +265,7 @@ export function writeTableCreationFile(outDir: string) {
     })
     writer.writeStringNewLine(`void WriteTables()`);
     writer.BeginBlock()
-    // todo: remove entirely
+    classes.forEach(x=>writer.writeStringNewLine(`${x}::__CreateTable();`))
     writer.EndBlock()
     const tableFile = mpath(outDir,'livescripts','TableCreator.cpp');
     TRANSPILER_CHANGES.writeIfChanged(

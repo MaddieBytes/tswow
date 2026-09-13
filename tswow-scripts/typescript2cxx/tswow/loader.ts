@@ -52,6 +52,7 @@ export function writeLoader(outDir: string) {
 
     cpp.writeStringNewLine(`void AddTSScripts(TSEvents* handlers)`);
     cpp.BeginBlock();
+    cpp.writeStringNewLine(`TSInitialize(handlers);`);
     cpp.writeStringNewLine(`WriteTables();`);
     if(mainExists) {
         cpp.writeStringNewLine(`Main(handlers);`);

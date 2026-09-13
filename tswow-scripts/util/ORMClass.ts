@@ -215,7 +215,12 @@ export class ORMClass {
         let valProp = target === 'c++' ? '->' : '.'
         let resProp = target === 'c++' ? '->' : ':'
         this.fields.forEach((x,i)=>{
-            res += `${s}${valName}${valProp}${x.memoryName()} = ${resName}${resProp}${x.settings().getMethod}(${i});\n`
+            const getMethod = target === 'c++' && x.type === 'uint64'
+                ? 'GetUInt64Raw'
+                : target === 'c++' && x.type === 'int64'
+                    ? 'GetInt64Raw'
+                    : x.settings().getMethod
+            res += `${s}${valName}${valProp}${x.memoryName()} = ${resName}${resProp}${getMethod}(${i});\n`
         })
         return res;
     }
