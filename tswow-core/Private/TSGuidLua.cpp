@@ -5,6 +5,7 @@ void TSLua::load_guid_methods(sol::state& state)
 {
     auto ts_guid = state.new_usertype<TSGUID>("TSGUID");
     LUA_FIELD(ts_guid, TSGUID, GetCounter);
+    LUA_FIELD(ts_guid, TSGUID, GetLow);
     LUA_FIELD(ts_guid, TSGUID, GetEntry);
     LUA_FIELD(ts_guid, TSGUID, GetType);
     LUA_FIELD(ts_guid, TSGUID, IsEmpty);

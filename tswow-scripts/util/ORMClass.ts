@@ -175,7 +175,9 @@ export class ORMClass {
         let str = ''
         str += `${i}CreateDatabaseSpec(\n`
         str += `${i}    ${this.databaseIndex()},\n`
-        str += `${i}    ${this.capitalizedDbType()}DatabaseInfo()${arrow}Database(),\n`
+        str += target === 'lua'
+            ? `${i}    "",\n`
+            : `${i}    ${this.capitalizedDbType()}DatabaseInfo()${arrow}Database(),\n`
         str += `${i}    "${this.tableName}",\n`
         str += `${i}    {\n`
         this.fields.forEach(x=>{

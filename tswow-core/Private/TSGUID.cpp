@@ -15,6 +15,11 @@ TSNumber<uint32> TSGUID::GetCounter() const
     return asGUID().GetCounter();
 }
 
+TSNumber<uint32> TSGUID::GetLow() const
+{
+    return GetCounter();
+}
+
 TSNumber<uint32> TSGUID::GetType() const
 {
     return static_cast<uint32>(asGUID().GetHigh());

@@ -100,14 +100,12 @@ export const LuaORM: Plugin = {
                             break;
                         case 'DBArrayEntry':
                             file.code += `    if self.__index == 0 then\n`
-                            file.code += `        local con = Get${cls.capitalizedDbType()}DBConnection()\n`
+                            file.code += `        local res = Query${cls.capitalizedDbType()}("SELECT UUID_SHORT();")\n`
+                            file.code += `        if not res:GetRow() then error("Could not allocate a DBArrayEntry index") end\n`
+                            file.code += `        self.__index = res:GetUInt64(0)\n`
                             file.code += `        ${saveVar}:Create()\n`
                             file.code += cls.saveFields(12,'lua')
-                            file.code += `            :Send(con)\n`
-                            file.code += `        local res = con:Query("SELECT LAST_INSERT_ID();")\n`
-                            file.code += `        res:GetRow();\n`
-                            file.code += `        self.__index = res:GetUInt64(0);\n`
-                            file.code += `        con:Unlock();\n`
+                            file.code += `            :Send()\n`
                             file.code += `    else\n`
                             file.code += `        ${saveVar}:Create()\n`
                             file.code += cls.saveFields(12,'lua')
@@ -153,4 +151,4 @@ export const LuaORM: Plugin = {
         let dbpath = new WDirectory(options.outDir).join('__create_tables.lua')
         dbpath.toFile().write(databaseFile);
     },
-} 
+}

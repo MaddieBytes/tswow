@@ -10,6 +10,7 @@ public:
     explicit TSGUID(uint64 guid);
     TSGUID();
     TSNumber<uint32> GetCounter() const;
+    TSNumber<uint32> GetLow() const;
     TSNumber<uint32> GetType() const;
     TSNumber<uint32> GetEntry() const;
     bool operator==(TSGUID const& oth) const;

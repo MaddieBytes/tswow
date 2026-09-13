@@ -95,6 +95,8 @@ const lua_tsconfig_json = {
       "target": "es5",
       "module": "commonjs",
       "strict": true,
+      "strictNullChecks": false,
+      "lib": ["es2015", "dom"],
       "esModuleInterop": true,
       "skipLibCheck": true,
       "sourceMap": true,

@@ -266,6 +266,7 @@ export function InstallPath(pathIn: string, tdb: string) {
         node_modules: dir({
             typescript_js: file('typescript/lib/tsc'),
             tstl_decorators: file('typescript-to-lua/dist/transformation/visitors/class/decorators.js'),
+            tstl_function_context: file('typescript-to-lua/dist/transformation/utils/function-context.js'),
             tstl_js: file('typescript-to-lua/dist/tstl.js'),
             wow: dir({
                 data: dir({

@@ -207,6 +207,7 @@ declare type TSMutableNumber<T> = TSMutable<TSNumber<T>,T>
 
 declare interface TSGUID {
     GetCounter(): TSNumber<uint32>
+    GetLow(): TSNumber<uint32>
     GetEntry(): TSNumber<uint32>
     GetType(): HighGuid
 
