@@ -1,6 +1,6 @@
 import { isTrinityCore } from "../Settings";
 
-export type TranslateDirection = 'IN'|'OUT'
+export type TranslateDirection = 'IN'|'OUT'|'DEST'
 export type TranslateContext = 'ROW'|'QUERY'
 
 export function translate(
@@ -16,7 +16,7 @@ export function translate(
             if(row[from] === undefined) return;
             row[to] = row[from];
             delete row[from];
-        } else {
+        } else if(direction === 'OUT' || direction === 'DEST') {
             if(row[to] === undefined) return;
             row[from] = row[to];
             delete row[to];
@@ -24,19 +24,19 @@ export function translate(
     }
 
     const add_out = (key: string, value: any) => {
-        if(direction === 'OUT' && context === 'ROW') {
+        if(direction === 'DEST' && context === 'ROW') {
             row[key] = value;
         }
     }
 
     const remove_out = (key: string) => {
-        if(direction !== 'OUT' || row[key] === undefined) return;
-        if(context === 'QUERY') {
+        if(row[key] === undefined) return;
+        if(direction === 'OUT' && context === 'QUERY') {
             throw new Error(
                 `AzerothCore does not support querying TSWoW field ${table}.${key}`
             );
         }
-        delete row[key];
+        if(direction === 'DEST' && context === 'ROW') delete row[key];
     }
 
     const creatureAddonBytes = () => {
@@ -83,9 +83,21 @@ export function translate(
             rename('FemaleText','Text1');
             break;
         case 'creature':
+            if(direction === 'DEST') {
+                remove_out('modelid')
+                break;
+            }
+            if(direction === 'IN' && context === 'ROW') {
+                for(const key of ['id2','id3']) {
+                    if(Number(row[key] || 0) !== 0) {
+                        throw new Error(
+                            `AzerothCore creature spawns do not support nonzero ${key}`
+                        );
+                    }
+                    delete row[key];
+                }
+            }
             rename('id1','id')
-            add_out('id2',0)
-            add_out('id3',0)
             remove_out('modelid')
             break;
         case 'game_event_battleground_holiday':

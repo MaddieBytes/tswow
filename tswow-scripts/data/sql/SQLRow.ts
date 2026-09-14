@@ -100,7 +100,7 @@ export abstract class SqlRow<C, Q> extends Row<C, Q> {
         Object.keys(obj).forEach(key=>{
             if(obj[key] === undefined) delete obj[key];
         });
-        translate(this.table.name,obj,'OUT');
+        translate(this.table.name,obj,'DEST');
         return obj;
     }
 
@@ -108,7 +108,7 @@ export abstract class SqlRow<C, Q> extends Row<C, Q> {
         const obj: {[key: string]: any} = {};
         const values = this.primaryKeys();
         Row.primaryKeyFields(this).forEach((key,index)=>obj[key] = values[index]);
-        translate(this.table.name,obj,'OUT','QUERY');
+        translate(this.table.name,obj,'DEST','QUERY');
         return obj;
     }
 
