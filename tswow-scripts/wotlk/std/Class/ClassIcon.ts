@@ -118,7 +118,9 @@ luaxml('build-class-icons',()=>{
         }
     }
 
-    stitchedSquares?.write(dataset.luaxml.join(SQUARES_LOCAL).get(),'PNG+BLP')
-    stitchedCircles?.write(dataset.luaxml.join(CIRCLES_LOCAL).get(),'PNG+BLP')
-    stitchedWorldstates?.write(dataset.luaxml.join(WORLDSTATE_LOCAL).get(),'PNG+BLP')
+    return Promise.all([
+        stitchedSquares?.write(dataset.luaxml.join(SQUARES_LOCAL).get(),'PNG+BLP'),
+        stitchedCircles?.write(dataset.luaxml.join(CIRCLES_LOCAL).get(),'PNG+BLP'),
+        stitchedWorldstates?.write(dataset.luaxml.join(WORLDSTATE_LOCAL).get(),'PNG+BLP'),
+    ])
 })
