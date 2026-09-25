@@ -8,7 +8,7 @@ import { Class } from "./Class";
 export class ClassTalents extends MultiRowSystem<TalentTree,Class> {
     protected getAllRows(): TalentTree[] {
         return TalentTreeRegistry
-            .filter(x=>x.row.ClassMask.get()&(1<<(this.owner.ID-1)))
+            .filter(x=>x.row.ClassMask.get()&((1<<(this.owner.ID-1))>>>0))
     }
     protected isDeleted(value: TalentTree): boolean {
         return value.row.isDeleted();
@@ -18,7 +18,7 @@ export class ClassTalents extends MultiRowSystem<TalentTree,Class> {
         let tree = TalentTreeRegistry.create(mod,id)
         tree.row.OrderIndex.set(tabIndex)
                 .RaceMask.set(makeMask(RaceMask,races))
-                .ClassMask.set(1<<(this.owner.ID-1))
+                .ClassMask.set((1<<(this.owner.ID-1))>>>0)
         return tree;
     }
 

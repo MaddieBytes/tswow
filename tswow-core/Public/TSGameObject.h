@@ -46,6 +46,7 @@ public:
     void SetLootState(uint32 state);
     void SaveToDB();
     void RemoveFromWorld(bool deldb);
+    void Use(TSUnit user);
     void UseDoorOrButton(uint32 delay);
     void Despawn(bool forced = false, uint32 delayMs = 0, uint32 respawnSec = 0);
     void Respawn();

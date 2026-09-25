@@ -254,6 +254,8 @@ void TSLua::load_events(sol::state& state)
     LUA_MAPPED_HANDLE(creature_events, CreatureEvents, OnUpdateLvlDepArmor);
     LUA_MAPPED_HANDLE(creature_events, CreatureEvents, OnUpdateLvlDepAttackPower);
     LUA_MAPPED_HANDLE(creature_events, CreatureEvents, OnSendVendorItem);
+    LUA_MAPPED_HANDLE(creature_events, CreatureEvents, OnCanSeeForPlayer);
+    LUA_MAPPED_HANDLE(creature_events, CreatureEvents, OnVendorRestockDelay);
     LUA_MAPPED_HANDLE(creature_events, CreatureEvents, OnGossipHello);
     LUA_MAPPED_HANDLE(creature_events, CreatureEvents, OnGossipSelect);
     LUA_MAPPED_HANDLE(creature_events, CreatureEvents, OnGossipSelectCode);
@@ -261,6 +263,7 @@ void TSLua::load_events(sol::state& state)
     LUA_MAPPED_HANDLE(creature_events, CreatureEvents, OnQuestReward);
     LUA_MAPPED_HANDLE(creature_events, CreatureEvents, OnUpdateResistance);
     LUA_MAPPED_HANDLE(creature_events, CreatureEvents, OnUpdateArmor);
+    LUA_MAPPED_HANDLE(creature_events, CreatureEvents, OnUpdateGuardianStats);
     LUA_MAPPED_HANDLE(creature_events, CreatureEvents, OnUpdateMaxHealth);
     LUA_MAPPED_HANDLE(creature_events, CreatureEvents, OnUpdateMaxPower);
     LUA_MAPPED_HANDLE(creature_events, CreatureEvents, OnUpdateAttackPowerDamage);

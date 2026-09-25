@@ -1,5 +1,6 @@
 #include "TSLua.h"
 #include "TSAura.h"
+#include "SpellAuraEffects.h"
 #include "TSGUID.h"
 
 void TSLua::load_aura_methods(sol::state& state)
@@ -17,6 +18,10 @@ void TSLua::load_aura_methods(sol::state& state)
     LUA_FIELD(ts_auraeffect, TSAuraEffect, GetAuraType);
     LUA_FIELD(ts_auraeffect, TSAuraEffect, GetAmount);
     LUA_FIELD(ts_auraeffect, TSAuraEffect, SetAmount);
+    // Explicit Lua modifier update; preserve SetAmount's raw-set semantics.
+    ts_auraeffect.set_function("ChangeAmount", [](TSAuraEffect& effect, int32 amount) {
+        effect.aura->ChangeAmount(amount);
+    });
     LUA_FIELD(ts_auraeffect, TSAuraEffect, GetPeriodicTimer);
     LUA_FIELD(ts_auraeffect, TSAuraEffect, SetPeriodicTimer);
     LUA_FIELD(ts_auraeffect, TSAuraEffect, GetTickNumber);

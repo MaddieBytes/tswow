@@ -65,6 +65,7 @@ void TSLua::load_player_methods(sol::state& state)
     LUA_FIELD(ts_player, TSPlayer, IsInSameGroupWith);
     LUA_FIELD(ts_player, TSPlayer, IsHonorOrXPTarget);
     LUA_FIELD(ts_player, TSPlayer, IsVisibleForPlayer);
+    LUA_FIELD(ts_player, TSPlayer, RefreshVisibility);
     LUA_FIELD(ts_player, TSPlayer, IsGMVisible);
     LUA_FIELD(ts_player, TSPlayer, IsTaxiCheater);
     LUA_FIELD(ts_player, TSPlayer, IsGMChat);
@@ -117,6 +118,8 @@ void TSLua::load_player_methods(sol::state& state)
     LUA_FIELD(ts_player, TSPlayer, GetReqKillOrCastCurrentCount);
     LUA_FIELD(ts_player, TSPlayer, GetQuestLevel);
     LUA_FIELD(ts_player, TSPlayer, GetEquippedItemBySlot);
+    LUA_FIELD(ts_player, TSPlayer, SetVisibleItemSlot);
+    LUA_FIELD(ts_player, TSPlayer, Transmogrify);
     LUA_FIELD(ts_player, TSPlayer, GetRestBonus);
     LUA_FIELD(ts_player, TSPlayer, GetChatTag);
     LUA_FIELD(ts_player, TSPlayer, SetBankBagSlotCount);

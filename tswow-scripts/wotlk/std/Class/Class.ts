@@ -59,7 +59,7 @@ export class Class extends MainEntityID<ChrClassesRow> {
     get Inventory() { return new ClassStartInventory(this); }
     get Filename() { return this.row.Filename.get(); }
     get ID() { return this.row.ID.get(); }
-    get Mask() { return 1<<(this.ID-1) }
+    get Mask() { return (1<<(this.ID-1))>>>0 }
     get Stats() { return new ClassStats(this); }
     get Name() { return this.wrapLoc(this.row.Name); }
     get Flags() { return this.wrap(this.row.Flags); }

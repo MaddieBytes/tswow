@@ -157,7 +157,7 @@ export class ClassRegistryClass
         if(languages.length == 0) {
             languages = SQL.playercreateinfo_skills.queryAll({comment:includes("Language")})
         }
-        languages.forEach(x=>x.clone(x.raceMask.get(),(x.classMask.get()|1<<(id-1)>>>0),x.skill.get()));
+        languages.forEach(x=>x.clone(x.raceMask.get(),((x.classMask.get()|(1<<(id-1)))>>>0),x.skill.get()));
 
         // Setup RaceClassInfos
         DBC.SkillRaceClassInfo.query({});

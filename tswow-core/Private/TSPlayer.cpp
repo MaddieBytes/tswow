@@ -567,6 +567,11 @@ bool TSPlayer::IsVisibleForPlayer(TSPlayer _target)
     return player->IsVisibleGloballyFor(target);
 }
 
+void TSPlayer::RefreshVisibility()
+{
+    player->UpdateObjectVisibility(true);
+}
+
 bool TSPlayer::IsGMVisible()
 {
     return player->isGMVisible();
@@ -1196,6 +1201,30 @@ TSItem  TSPlayer::GetEquippedItemBySlot(uint8 slot)
 
     Item* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
      return TSItem(item);
+}
+
+void TSPlayer::SetVisibleItemSlot(uint8 slot, TSItem item)
+{
+    player->SetVisibleItemSlot(slot, item.item);
+}
+
+void TSPlayer::Transmogrify(uint8 slot, uint32 itemEntry)
+{
+    Item* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
+    if (!item)
+        return;
+    item->transmog = itemEntry;
+    item->UpdatePlayedTime(player);
+    item->SetOwnerGUID(player->GetGUID());
+    item->SetNotRefundable(player);
+    item->ClearSoulboundTradeable(player);
+    item->SetState(ITEM_CHANGED, player);
+    if (item->IsEquipped())
+    {
+        player->SetVisibleItemSlot(item->GetSlot(), item);
+        if (player->IsInWorld())
+            item->SendUpdateToPlayer(player);
+    }
 }
 
 /**

@@ -64,6 +64,8 @@ void TSLua::load_creature_methods(sol::state & state)
     LUA_FIELD(ts_creature, TSCreature, GetHomePosition);
     LUA_FIELD(ts_creature, TSCreature, SetHomePosition);
     LUA_FIELD(ts_creature, TSCreature, FindThreatListEntry);
+    LUA_FIELD_OVERLOAD_RET_1_4(ts_creature, TSCreature, SelectLegacyAttackingTarget,
+        uint32, uint32, uint32, uint32);
     LUA_FIELD(ts_creature, TSCreature, GetThreatListCount);
     LUA_FIELD(ts_creature, TSCreature, GetNPCFlags);
     LUA_FIELD(ts_creature, TSCreature, GetShieldBlockValue);
@@ -88,11 +90,20 @@ void TSLua::load_creature_methods(sol::state & state)
     LUA_FIELD(ts_creature, TSCreature, DespawnOrUnsummon);
     LUA_FIELD(ts_creature, TSCreature, Respawn);
     LUA_FIELD(ts_creature, TSCreature, RemoveCorpse);
+    LUA_FIELD(ts_creature, TSCreature, GetDefaultGossipMenuID);
+    LUA_FIELD(ts_creature, TSCreature, SetDefaultGossipMenuID);
+    LUA_FIELD(ts_creature, TSCreature, ClearDefaultGossipMenuID);
     LUA_FIELD(ts_creature, TSCreature, MoveWaypoint);
     LUA_FIELD(ts_creature, TSCreature, CallAssistance);
     LUA_FIELD(ts_creature, TSCreature, CallForHelp);
     LUA_FIELD(ts_creature, TSCreature, FleeToGetAssistance);
+    LUA_FIELD(ts_creature, TSCreature, TryFlee);
     LUA_FIELD(ts_creature, TSCreature, AttackStart);
+    LUA_FIELD(ts_creature, TSCreature, UpdateVictim);
+    LUA_FIELD(ts_creature, TSCreature, IsTargetUnreachable);
+    LUA_FIELD(ts_creature, TSCreature, SetCombatMovement);
+    LUA_FIELD(ts_creature, TSCreature, SetAutoAttackEnabled);
+    LUA_FIELD(ts_creature, TSCreature, SetMainRangedSpellMode);
     LUA_FIELD(ts_creature, TSCreature, SetReactState);
     LUA_FIELD(ts_creature, TSCreature, GetReactState);
     LUA_FIELD(ts_creature, TSCreature, SaveToDB);

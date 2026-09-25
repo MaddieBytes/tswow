@@ -682,6 +682,8 @@ declare interface TSPlayer extends TSUnit, TSDBJsonProvider {
      * @return bool isVisibleForPlayer
      */
     IsVisibleForPlayer(target : TSPlayer) : bool
+    /** Re-evaluates nearby world-object visibility for this player immediately. */
+    RefreshVisibility() : void
     IsGMVisible() : bool
 
     /**
@@ -1060,6 +1062,8 @@ declare interface TSPlayer extends TSUnit, TSDBJsonProvider {
      * @return [Item] item
      */
     GetEquippedItemBySlot(slot : uint8) : TSItem | undefined
+    SetVisibleItemSlot(slot : uint8, item : TSItem) : void
+    Transmogrify(slot : uint8, itemEntry : uint32) : void
 
     /**
      * Returns the [Player]s current resting bonus
@@ -3032,6 +3036,11 @@ declare interface TSCreature extends TSUnit {
      */
     SetHomePosition(x : float,y : float,z : float,o : float) : void
     FindThreatListEntry(targetType : uint32,playerOnly : bool,position : uint32,dist : float,aura : int32) : TSUnit | undefined
+    /**
+     * Selects a hostile threat-list target using the legacy VMaNGOS ordering,
+     * offset, flag, and spell-range rules.
+     */
+    SelectLegacyAttackingTarget(targetType : uint32,position? : uint32,spellId? : uint32,selectFlags? : uint32) : TSUnit | undefined
     GetThreatList() : TSArray<TSUnit>
 
     /**
@@ -3126,7 +3135,12 @@ declare interface TSCreature extends TSUnit {
      * This is used by raid bosses to prevent Players from using out-of-combat
      *   actions once the encounter has begun.
      */
-    SetInCombatWithZone() : void
+    /**
+     * Engages every eligible living player in the dungeon instance, together
+     * with their controlled units. Returns false without changing state when
+     * this creature has no enabled AI or is not in a dungeon map.
+     */
+    SetInCombatWithZone() : bool
 
     /**
      * Sets the distance the [Creature] can wander from it's spawn point.
@@ -3194,6 +3208,15 @@ declare interface TSCreature extends TSUnit {
      */
     RemoveCorpse() : void
 
+    /** Returns the creature instance's effective default gossip menu. */
+    GetDefaultGossipMenuID() : TSNumber<uint32>
+
+    /** Overrides the default gossip menu for this creature instance. */
+    SetDefaultGossipMenuID(menuId : uint32) : void
+
+    /** Restores the creature template's default gossip menu. */
+    ClearDefaultGossipMenuID() : void
+
     /**
      * Make the [Creature] start following its waypoint path.
      */
@@ -3217,11 +3240,53 @@ declare interface TSCreature extends TSUnit {
     FleeToGetAssistance() : void
 
     /**
+     * Starts a source-compatible normal flee without seeking assistance.
+     * Returns false when the creature cannot begin fleeing.
+     */
+    TryFlee() : bool
+
+    /**
      * Make the [Creature] attack `target`.
      *
      * @param [Unit] target
      */
     AttackStart(target : TSUnit) : void
+
+    /** Runs the current creature AI's native victim update/selection gate. */
+    UpdateVictim() : bool
+
+    /**
+     * Returns whether target is outside melee auto-attack range while the
+     * creature is currently chasing and is either rooted or has a chase path
+     * TrinityCore marked unreachable. Returns false when the required state
+     * cannot be established.
+     */
+    IsTargetUnreachable(target : TSUnit) : bool
+
+    /**
+     * Enables or disables combat movement for SmartAI or ScriptedAI. SmartAI
+     * applies its native chase transition immediately; ScriptedAI's native
+     * state only affects a subsequent AttackStart.
+     * Returns false without changing state for unsupported AI types.
+     */
+    SetCombatMovement(enabled : bool) : bool
+
+    /**
+     * Enables or disables SmartAI automatic melee attacks.
+     * Returns false without changing state when the current AI is not SmartAI.
+     */
+    SetAutoAttackEnabled(enabled : bool) : bool
+
+    /**
+     * Enables or disables the SmartAI ranged-only state corresponding to
+     * VMaNGOS CF_MAIN_RANGED_SPELL. Enabling stops movement/chase and ordinary
+     * melee; disabling restores both for the current victim. Returns false
+     * without changing state when the current AI is not SmartAI.
+     *
+     * Call with false on combat exit/reset before the next engagement because
+     * TrinityCore SmartAI does not reset its auto-attack flag on evade.
+     */
+    SetMainRangedSpellMode(enabled : bool) : bool
 
     /**
      * Sets how a [Creature] responds to being attacked.
@@ -5036,6 +5101,11 @@ declare interface TSGameObject extends TSWorldObject {
     RemoveFromWorld(deldb : bool) : void
 
     /**
+     * Uses this [GameObject] as the supplied [Unit].
+     */
+    Use(user : TSUnit) : void
+
+    /**
      * Activates a door or a button/lever
      *
      * @param uint32 delay = 0 : cooldown time in seconds to restore the [GameObject] back to normal. 0 for infinite duration
@@ -5122,6 +5192,9 @@ declare interface TSSpell extends TSEntityProvider {
      * @return uint32 powerCost
      */
     GetPowerCost() : TSNumber<uint32>
+
+    /** Actual health deducted for this cast; zero before payment or for free casts. */
+    GetPaidHealthCost() : TSNumber<uint32>
 
     /**
      * Returns the spell duration of the [Spell].
@@ -6327,6 +6400,15 @@ declare interface TSUnit extends TSWorldObject {
     HasUnitState(state : uint32) : bool
 
     /**
+     * Returns whether this unit is within TrinityCore's melee auto-attack
+     * range for target, or false for an invalid source or target.
+     */
+    CanReachWithMeleeAutoAttack(target : TSUnit) : bool
+
+    /** Refresh stats after aura changes. Do not call inside a stat-update hook. */
+    UpdateAllStats(): bool;
+
+    /**
      * Returns the [Unit]'s owner.
      *
      * @return [Unit] owner
@@ -7127,6 +7209,12 @@ declare interface TSUnit extends TSWorldObject {
     SetFeared(apply : bool) : void
 
     /**
+     * Sets this unit's global server-side visibility and updates object
+     * visibility for nearby clients. Returns false only for a null unit.
+     */
+    SetVisible(visible : bool) : bool
+
+    /**
      * Clears the [Unit]'s threat list.
      */
     ClearThreatList(apply : bool,x : bool) : void
@@ -7254,6 +7342,14 @@ declare interface TSUnit extends TSWorldObject {
      * @param bool genPath = true : if true, generates path
      */
     MoveTo(id : uint32,x : float,y : float,z : float,genPath : bool,finalAngle?: float) : void
+    /** Launches a movement spline without installing a point movement generator.
+     * walkMode: -1 keeps the current mode, 0 runs, and 1 walks.
+     * velocity 0 uses the selected movement mode's normal speed.
+     * finalAngle < 0 leaves arrival orientation automatic.
+     */
+    MoveSplineTo(x : float, y : float, z : float, genPath?: bool,
+        forceDestination?: bool, walkMode?: int32, velocity?: float,
+        finalAngle?: float) : void
 
     /**
      * The [Unit] will take off from the ground and fly to the coordinates.
@@ -7349,12 +7445,36 @@ declare interface TSUnit extends TSWorldObject {
     SendUnitSay(msg : string,language : uint32) : void
 
     /**
+     * Makes the [Unit] say a BroadcastText entry localized for each receiver.
+     *
+     * @param uint32 textId
+     * @param [WorldObject] target
+     */
+    SendBroadcastTextSay(textId : uint32,target? : TSWorldObject) : void
+
+    /**
+     * Makes the [Unit] emit a BroadcastText text-emote localized for each receiver.
+     */
+    SendBroadcastTextEmote(textId : uint32,target? : TSWorldObject,bossEmote? : bool) : void
+
+    /**
      * The [Unit] will yell the message
      *
      * @param string msg : message for the [Unit] to yell
      * @param uint32 language : language for the [Unit] to speak
      */
     SendUnitYell(msg : string,language : uint32) : void
+    SendBroadcastTextYell(textId : uint32,target? : TSWorldObject) : void
+    SendUnitSayToZone(msg : string,language : uint32,zoneId?: uint32) : void
+
+    /**
+     * The [Unit] will yell the message to every player in a zone.
+     *
+     * @param string msg : message for the [Unit] to yell
+     * @param uint32 language : language for the [Unit] to speak
+     * @param uint32 zoneId = 0 : zone to receive the yell, or the [Unit]'s current zone when zero
+     */
+    SendUnitYellToZone(msg : string,language : uint32,zoneId?: uint32) : void
 
     /**
      * Unmorphs the [Unit] setting it's display ID back to the native display ID.
@@ -7366,6 +7486,7 @@ declare interface TSUnit extends TSWorldObject {
      * Clears the [Unit]'s combat
      */
     ClearInCombat() : void
+    CombatStop(includingCast? : bool,mutualPvP? : bool) : void
 
     /**
      * Stops the [Unit]'s current spell cast
@@ -7383,6 +7504,8 @@ declare interface TSUnit extends TSWorldObject {
      * @param bool delayed = true : skips if the spell is delayed
      */
     InterruptSpell(spellType : int,delayed : bool) : void
+    IsNonMeleeSpellCast(withDelayed? : bool,skipChanneled? : bool,skipAutorepeat? : bool) : bool
+    InterruptNonMeleeSpells(withDelayed : bool,spellId? : uint32,withInstant? : bool) : void
 
     /**
      * Adds the [Aura] of the given spell entry on the given target from the [Unit].
@@ -8611,6 +8734,18 @@ declare namespace _hidden {
         OnSendVendorItem(callback: (creature: TSCreature, item: TSItemTemplate, player: TSPlayer, shouldSend: TSMutable<boolean,boolean>)=>void): T
         OnSendVendorItem(id: EventID, callback: (creature: TSCreature, item: TSItemTemplate, player: TSPlayer, shouldSend: TSMutable<boolean,boolean>)=>void): T
 
+        /** Runs for player-to-creature visibility and detection checks. Setting
+         * canSee false denies visibility; true retains the normal core checks. */
+        OnCanSeeForPlayer(callback: (creature: TSCreature, player: TSPlayer, canSee: TSMutable<boolean,boolean>)=>void): T
+        OnCanSeeForPlayer(id: EventID, callback: (creature: TSCreature, player: TSPlayer, canSee: TSMutable<boolean,boolean>)=>void): T
+
+        OnVendorRestockDelay(callback: (creature: TSCreature, item: TSItemTemplate, activeSessions: TSNumber<uint32>, delay: TSMutableNumber<uint32>)=>void): T
+        OnVendorRestockDelay(id: EventID, callback: (creature: TSCreature, item: TSItemTemplate, activeSessions: TSNumber<uint32>, delay: TSMutableNumber<uint32>)=>void): T
+
+        /** Runs before a guardian stat is committed. Adjust value and ownerBonus
+         * together when replacing inherited scaling. Never call UpdateAllStats here. */
+        OnUpdateGuardianStats(callback: (creature: TSCreature, stat: TSNumber<uint32>, value: TSMutableNumber<float>, ownerBonus: TSMutableNumber<float>) => void): void;
+        OnUpdateGuardianStats(id: EventID, callback: (creature: TSCreature, stat: TSNumber<uint32>, value: TSMutableNumber<float>, ownerBonus: TSMutableNumber<float>) => void): void;
         OnUpdateResistance(callback: (
               creature: TSCreature
             , value: TSMutableNumber<float>

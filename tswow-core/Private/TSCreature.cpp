@@ -23,7 +23,9 @@
 #include "TSPlayer.h"
 #include "TSGroup.h"
 #include "SpellMgr.h"
+#include "Spell.h"
 #include "SpellInfo.h"
+#include "DBCStructure.h"
 #include "TSSpellInfo.h"
 #include "TSGameObject.h"
 #if TRINITY
@@ -32,6 +34,7 @@
 #endif
 #include "ObjectGuid.h"
 #include "CreatureAI.h"
+#include "Map.h"
 #include "MotionMaster.h"
 #include "Player.h"
 #include "TSMap.h"
@@ -40,6 +43,103 @@
 #include "CreatureOutfit.h"
 #endif
 #include "SmartAI.h"
+#include "ScriptedCreature.h"
+#include "World.h"
+
+#if TRINITY
+namespace
+{
+    enum LegacySelectFlags : uint32
+    {
+        LEGACY_SELECT_IN_LOS             = 0x001,
+        LEGACY_SELECT_PLAYER             = 0x002,
+        LEGACY_SELECT_POWER_MANA         = 0x004,
+        LEGACY_SELECT_POWER_RAGE         = 0x008,
+        LEGACY_SELECT_POWER_ENERGY       = 0x010,
+        LEGACY_SELECT_IN_MELEE_RANGE     = 0x040,
+        LEGACY_SELECT_NOT_IN_MELEE_RANGE = 0x080,
+        LEGACY_SELECT_NO_TOTEM           = 0x100,
+        LEGACY_SELECT_PLAYER_NOT_GM      = 0x200,
+        LEGACY_SELECT_PET                = 0x400,
+        LEGACY_SELECT_NOT_PLAYER         = 0x800,
+        LEGACY_SELECT_POWER_NOT_MANA     = 0x1000,
+        LEGACY_SELECT_NO_PET             = 0x2000
+    };
+
+    bool IsLegacySpellTargetInRange(Creature* caster, Unit* target, SpellInfo const* spellInfo)
+    {
+        if (!spellInfo || !spellInfo->RangeEntry)
+            return true;
+
+        switch (spellInfo->RangeEntry->ID)
+        {
+            case 1: // SPELL_RANGE_IDX_SELF_ONLY
+                for (SpellEffectInfo const& effect : spellInfo->GetEffects())
+                    if (effect.RadiusEntry)
+                        return caster->GetDistance(target) <= effect.CalcRadius(caster);
+
+                for (SpellEffectInfo const& effect : spellInfo->GetEffects())
+                    if (effect.TriggerSpell)
+                        if (SpellInfo const* triggered = sSpellMgr->GetSpellInfo(effect.TriggerSpell))
+                            if (IsLegacySpellTargetInRange(caster, target, triggered))
+                                return true;
+
+                return caster == target;
+            case 2: // SPELL_RANGE_IDX_COMBAT
+                return caster->IsWithinMeleeRange(target);
+            case 13: // SPELL_RANGE_IDX_ANYWHERE
+                return true;
+            default:
+            {
+                float distance = caster->GetDistance(target);
+                return distance < spellInfo->GetMaxRange(false, caster)
+                    && distance >= spellInfo->GetMinRange(false);
+            }
+        }
+    }
+
+    bool MeetsLegacyAttackingRequirement(Creature* caster, Unit* target, SpellInfo const* spellInfo, uint32 selectFlags)
+    {
+        if (!target)
+            return false;
+
+        if ((selectFlags & LEGACY_SELECT_PLAYER) && target->GetTypeId() != TYPEID_PLAYER)
+            return false;
+        if ((selectFlags & LEGACY_SELECT_NO_TOTEM) && target->IsTotem())
+            return false;
+        if ((selectFlags & LEGACY_SELECT_NO_PET) && target->IsPet())
+            return false;
+        if ((selectFlags & LEGACY_SELECT_POWER_MANA) && target->GetPowerType() != POWER_MANA)
+            return false;
+        if ((selectFlags & LEGACY_SELECT_POWER_NOT_MANA) && target->GetPowerType() == POWER_MANA)
+            return false;
+        if ((selectFlags & LEGACY_SELECT_POWER_RAGE) && target->GetPowerType() != POWER_RAGE)
+            return false;
+        if ((selectFlags & LEGACY_SELECT_POWER_ENERGY) && target->GetPowerType() != POWER_ENERGY)
+            return false;
+        if ((selectFlags & LEGACY_SELECT_IN_MELEE_RANGE) && !caster->IsWithinMeleeRange(target))
+            return false;
+        if ((selectFlags & LEGACY_SELECT_NOT_IN_MELEE_RANGE) && caster->IsWithinMeleeRange(target))
+            return false;
+        if ((selectFlags & LEGACY_SELECT_IN_LOS) && !caster->IsWithinLOSInMap(target))
+            return false;
+        if ((selectFlags & LEGACY_SELECT_PLAYER_NOT_GM)
+            && (target->GetTypeId() != TYPEID_PLAYER || target->ToPlayer()->IsGameMaster()))
+            return false;
+        if ((selectFlags & LEGACY_SELECT_PET) && !target->IsPet())
+            return false;
+        if ((selectFlags & LEGACY_SELECT_NOT_PLAYER) && target->GetTypeId() == TYPEID_PLAYER)
+            return false;
+
+        UnitFlags invalidFlags = UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_NOT_ATTACKABLE_1
+            | UNIT_FLAG_NON_ATTACKABLE_2 | UNIT_FLAG_ON_TAXI | UNIT_FLAG_UNINTERACTIBLE;
+        if (target->IsDead() || target->HasUnitFlag(invalidFlags) || caster->IsFriendlyTo(target))
+            return false;
+
+        return IsLegacySpellTargetInRange(caster, target, spellInfo);
+    }
+}
+#endif
 
 TSCreature::TSCreature(Creature *creature) : TSUnit(creature)
 {
@@ -754,6 +854,84 @@ TSUnit  TSCreature::FindThreatListEntry(uint32 targetType,bool playerOnly,uint32
 }
 
 /**
+ * Selects a hostile target with VMaNGOS Creature::SelectAttackingTarget
+ * semantics. The threat-list offset is applied before filtering, explicit
+ * flags replace the default no-totem flag, and spell filtering checks only
+ * the legacy source range rules.
+ *
+ * targetType: 0 random, 1 top threat, 2 bottom threat, 3 nearest, 4 farthest.
+ */
+TSUnit TSCreature::SelectLegacyAttackingTarget(uint32 targetType, uint32 position, uint32 spellId, uint32 selectFlags)
+{
+#if TRINITY
+    if (!creature || !creature->CanHaveThreatList() || targetType > 4)
+        return TSUnit(nullptr);
+
+    auto const& threatList = creature->GetThreatManager().GetSortedThreatList();
+    if (threatList.empty() || position >= threatList.size())
+        return TSUnit(nullptr);
+
+    SpellInfo const* spellInfo = spellId ? sSpellMgr->GetSpellInfo(spellId) : nullptr;
+    std::vector<Unit*> suitableTargets;
+    suitableTargets.reserve(threatList.size() - position);
+
+    for (size_t index = position; index < threatList.size(); ++index)
+    {
+        Unit* target = threatList[index]->GetVictim();
+        if (MeetsLegacyAttackingRequirement(creature, target, spellInfo, selectFlags))
+            suitableTargets.push_back(target);
+    }
+
+    if (suitableTargets.empty())
+        return TSUnit(nullptr);
+
+    switch (targetType)
+    {
+        case 0:
+            return TSUnit(suitableTargets[urand(0, suitableTargets.size() - 1)]);
+        case 1:
+            return TSUnit(suitableTargets.front());
+        case 2:
+            return TSUnit(suitableTargets.back());
+        case 3:
+        {
+            Unit* selected = suitableTargets.front();
+            float selectedDistance = creature->GetExactDist(selected);
+            for (Unit* target : suitableTargets)
+            {
+                float distance = creature->GetExactDist(target);
+                if (distance < selectedDistance)
+                {
+                    selected = target;
+                    selectedDistance = distance;
+                }
+            }
+            return TSUnit(selected);
+        }
+        case 4:
+        {
+            Unit* selected = suitableTargets.front();
+            float selectedDistance = creature->GetDistance(selected);
+            for (Unit* target : suitableTargets)
+            {
+                float distance = creature->GetDistance(target);
+                if (distance > selectedDistance)
+                {
+                    selected = target;
+                    selectedDistance = distance;
+                }
+            }
+            return TSUnit(selected);
+        }
+        default:
+            return TSUnit(nullptr);
+    }
+#else
+    return TSUnit(nullptr);
+#endif
+}
+
+/**
  * Returns all [Unit]s in the [Creature]'s threat list.
  *
  * @return table targets
@@ -940,19 +1118,32 @@ void TSCreature::SetDisableReputationGain(bool disable)
 }
 
 /**
- * Sets the [Creature] as in combat with all [Player]s in the dungeon instance.
+ * Sets the [Creature] as in combat with all eligible living [Player]s and
+ * their controlled units in the dungeon instance.
  *
  * This is used by raid bosses to prevent Players from using out-of-combat
- *   actions once the encounter has begun.
+ * actions once the encounter has begun. Returns `false` without changing
+ * anything when the creature has no enabled AI or is not in a dungeon map.
+ *
+ * @return bool supported
  */
-void TSCreature::SetInCombatWithZone()
+bool TSCreature::SetInCombatWithZone()
 {
+    if (!creature)
+        return false;
+
 #if defined TRINITY
-    if (creature->IsAIEnabled())
-        creature->AI()->DoZoneInCombat();
+    CreatureAI* ai = creature->IsAIEnabled() ? creature->AI() : nullptr;
+    Map* map = creature->GetMap();
+    if (!ai || !map || !map->IsDungeon())
+        return false;
+
+    ai->DoZoneInCombat();
 #else
     creature->SetInCombatWithZone();
 #endif
+
+    return true;
 }
 
 /**
@@ -1080,6 +1271,21 @@ void TSCreature::RemoveCorpse()
     creature->RemoveCorpse();
 }
 
+TSNumber<uint32> TSCreature::GetDefaultGossipMenuID()
+{
+    return creature->GetDefaultGossipMenuId();
+}
+
+void TSCreature::SetDefaultGossipMenuID(uint32 menuId)
+{
+    creature->SetDefaultGossipMenuId(menuId);
+}
+
+void TSCreature::ClearDefaultGossipMenuID()
+{
+    creature->ClearDefaultGossipMenuId();
+}
+
 /**
  * Make the [Creature] start following its waypoint path.
  */
@@ -1120,6 +1326,48 @@ void TSCreature::FleeToGetAssistance()
 }
 
 /**
+ * Starts the normal, non-assistance creature flee transaction.
+ *
+ * This is the Wrath-core equivalent of the classic Creature::DoFlee path:
+ * it preserves the classic eligibility guards, prevents a subsequent
+ * assistance search, starts timed family fleeing from the current victim,
+ * emits the localized flee text, and refreshes run speed. Wrath has no
+ * client-visible equivalents for the removed classic 15/10/5 percent aura
+ * states, so those bookkeeping bits are intentionally not synthesized.
+ *
+ * @return bool started
+ */
+bool TSCreature::TryFlee()
+{
+    if (!creature || !creature->IsAlive())
+        return false;
+
+    Unit* victim = creature->GetVictim();
+    if (!victim || creature->HasAuraType(SPELL_AURA_PREVENTS_FLEEING) ||
+        creature->HasUnitState(UNIT_STATE_DIED | UNIT_STATE_POSSESSED |
+            UNIT_STATE_DISTRACTED | UNIT_STATE_CONFUSED))
+        return false;
+
+    creature->SetNoSearchAssistance(true);
+    creature->AddUnitState(UNIT_STATE_FLEEING);
+    creature->ClearUnitState(UNIT_STATE_MELEE_ATTACKING);
+    creature->SendMeleeAttackStop(victim);
+    creature->SetTarget(ObjectGuid::Empty);
+    creature->GetMotionMaster()->MoveFleeing(
+        victim, sWorld->getIntConfig(CONFIG_CREATURE_FAMILY_FLEE_DELAY));
+    creature->TextEmote(1150, victim);
+    creature->UpdateSpeed(MOVE_RUN);
+    for (uint8 index = CURRENT_GENERIC_SPELL; index < CURRENT_MAX_SPELL; ++index)
+    {
+        CurrentSpellTypes spellType = static_cast<CurrentSpellTypes>(index);
+        Spell* spell = creature->GetCurrentSpell(spellType);
+        if (spell && spell->GetSpellInfo()->InterruptFlags & SPELL_INTERRUPT_FLAG_MOVEMENT)
+            creature->InterruptSpell(spellType, false);
+    }
+    return true;
+}
+
+/**
  * Make the [Creature] attack `target`.
  *
  * @param [Unit] target
@@ -1129,6 +1377,139 @@ void TSCreature::AttackStart(TSUnit _target)
     auto target = _target.unit;
 
     creature->AI()->AttackStart(target);
+}
+
+/**
+ * Runs the current creature AI's native victim update/selection gate.
+ *
+ * @return bool hasVictim
+ */
+bool TSCreature::UpdateVictim()
+{
+    return creature && creature->IsAIEnabled() && creature->AI()->UpdateVictim();
+}
+
+/**
+ * Returns whether `target` satisfies TrinityCore's exact current equivalent
+ * of the VMaNGOS CF_TARGET_UNREACHABLE predicate.
+ *
+ * The creature must be outside melee auto-attack range, its current movement
+ * generator must be chase, and it must either be rooted or have a chase path
+ * that TrinityCore has marked unreachable. Returns `false` when any required
+ * state cannot be established.
+ *
+ * @param [Unit] target
+ * @return bool unreachable
+ */
+bool TSCreature::IsTargetUnreachable(TSUnit target)
+{
+#if defined TRINITY
+    if (!creature || !target.unit)
+        return false;
+
+    MotionMaster* motion = creature->GetMotionMaster();
+    if (!motion || motion->GetCurrentMovementGeneratorType() != CHASE_MOTION_TYPE)
+        return false;
+
+    return !creature->IsWithinMeleeRange(target.unit)
+        && (creature->HasUnitState(UNIT_STATE_ROOT) || creature->CanNotReachTarget());
+#else
+    return false;
+#endif
+}
+
+/**
+ * Enables or disables the current AI's combat movement state.
+ *
+ * This is supported by SmartAI and ScriptedAI. SmartAI applies its native
+ * chase transition immediately; ScriptedAI's native state only affects a
+ * subsequent AttackStart. Returns `false` without changing anything when the
+ * current AI has no exact combat-movement state.
+ *
+ * @param bool enabled
+ * @return bool supported
+ */
+bool TSCreature::SetCombatMovement(bool enabled)
+{
+    CreatureAI* ai = creature && creature->IsAIEnabled() ? creature->AI() : nullptr;
+    if (SmartAI* smartAI = dynamic_cast<SmartAI*>(ai))
+    {
+        smartAI->SetCombatMove(enabled);
+        return true;
+    }
+
+    if (ScriptedAI* scriptedAI = dynamic_cast<ScriptedAI*>(ai))
+    {
+        scriptedAI->SetCombatMovement(enabled);
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Enables or disables SmartAI's automatic melee attacks.
+ *
+ * Returns `false` without changing anything when the current AI is not
+ * SmartAI, because TrinityCore has no common CreatureAI auto-attack toggle.
+ *
+ * @param bool enabled
+ * @return bool supported
+ */
+bool TSCreature::SetAutoAttackEnabled(bool enabled)
+{
+    CreatureAI* ai = creature && creature->IsAIEnabled() ? creature->AI() : nullptr;
+    if (SmartAI* smartAI = dynamic_cast<SmartAI*>(ai))
+    {
+        smartAI->SetAutoAttack(enabled);
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Enables or disables the ranged-only AI state used by VMaNGOS
+ * CF_MAIN_RANGED_SPELL creature spell entries.
+ *
+ * Enabling stops current movement, removes SmartAI combat chase, disables
+ * automatic melee attacks, and sends the melee-stop state for the current
+ * victim. Disabling restores SmartAI combat movement and automatic melee,
+ * including the current victim's melee-start state.
+ *
+ * Returns `false` without changing anything when the current AI is not
+ * SmartAI. Call with `false` on combat exit/reset before the next engagement;
+ * TrinityCore SmartAI does not reset its auto-attack flag on evade.
+ *
+ * @param bool enabled
+ * @return bool supported
+ */
+bool TSCreature::SetMainRangedSpellMode(bool enabled)
+{
+    SmartAI* smartAI = dynamic_cast<SmartAI*>(creature->AI());
+    if (!smartAI)
+        return false;
+
+    if (enabled && creature->IsMoving())
+        creature->StopMoving();
+
+    smartAI->SetCombatMove(!enabled, enabled);
+    smartAI->SetAutoAttack(!enabled);
+    if (Unit* victim = creature->GetVictim())
+    {
+        if (!enabled && !creature->HasUnitState(UNIT_STATE_MELEE_ATTACKING))
+        {
+            creature->AddUnitState(UNIT_STATE_MELEE_ATTACKING);
+            creature->SendMeleeAttackStart(victim);
+        }
+        else if (enabled && creature->HasUnitState(UNIT_STATE_MELEE_ATTACKING))
+        {
+            creature->ClearUnitState(UNIT_STATE_MELEE_ATTACKING);
+            creature->SendMeleeAttackStop(victim);
+        }
+    }
+
+    return true;
 }
 
 void TSCreature::SetReactState(uint8 state)
@@ -1380,4 +1761,3 @@ TSNumber<float> TSCreature::GetThreat(TSUnit target, bool includeOffline)
 {
     return creature->GetThreatManager().GetThreat(target, includeOffline);
 }
-

@@ -299,6 +299,14 @@ void TSGameObject::RemoveFromWorld(bool deldb)
 }
 
 /**
+ * Uses this [GameObject] as the supplied [Unit].
+ */
+void TSGameObject::Use(TSUnit user)
+{
+    go->Use(user.unit);
+}
+
+/**
  * Activates a door or a button/lever
  *
  * @param uint32 delay = 0 : cooldown time in seconds to restore the [GameObject] back to normal. 0 for infinite duration

@@ -29,11 +29,13 @@
 #include "Object.h"
 #include "Unit.h"
 #include "Chat.h"
+#include "Map.h"
 #include "Unit.h"
 #include "SpellMgr.h"
 #include "SpellInfo.h"
 #include "SpellAuraDefines.h"
 #include "MotionMaster.h"
+#include "MoveSplineInit.h"
 #include "Unit.h"
 #include "Player.h"
 #include "SpellHistory.h"
@@ -553,6 +555,12 @@ bool TSUnit::IsCasting()
  * @param [UnitState] state : an unit state
  * @return bool hasState
  */
+// Call after changing stat-bearing auras, not from a stat-update event.
+bool TSUnit::UpdateAllStats()
+{
+    return unit && unit->UpdateAllStats();
+}
+
 bool TSUnit::HasUnitState(uint32 state)
 {
 #if defined TRINITY
@@ -560,6 +568,19 @@ bool TSUnit::HasUnitState(uint32 state)
 #else
     return unit->hasUnitState(state);
 #endif
+}
+
+/**
+ * Returns whether this [Unit] is within the exact range used by TrinityCore
+ * for melee auto attacks against `target`. Returns `false` for an invalid
+ * source or target.
+ *
+ * @param [Unit] target
+ * @return bool canReach
+ */
+bool TSUnit::CanReachWithMeleeAutoAttack(TSUnit target)
+{
+    return unit && target.unit && unit->IsWithinMeleeRange(target.unit);
 }
 
 /**
@@ -1700,10 +1721,21 @@ void TSUnit::SetFeared(bool apply)
     unit->SetCanFly(apply);
 }*/
 
-/*int TSUnit::SetVisible(lua_State* L, Unit* unit)
+/**
+ * Sets the [Unit]'s global server-side visibility and updates object
+ * visibility for nearby clients.
+ *
+ * @param bool visible
+ * @return bool supported
+ */
+bool TSUnit::SetVisible(bool visible)
 {
-    unit->SetVisible(x);
-}*/
+    if (!unit)
+        return false;
+
+    unit->SetVisible(visible);
+    return true;
+}
 
 /**
  * Clears the [Unit]'s threat list.
@@ -1937,6 +1969,37 @@ void TSUnit::MoveTo(uint32 id,float x,float y,float z,bool genPath,float finalAn
     unit->GetMotionMaster()->MovePoint(id, x, y, z, genPath, finalAngle);
 }
 
+/**
+ * Moves the [Unit] with a directly launched spline instead of installing a
+ * point movement generator.
+ *
+ * @param float x
+ * @param float y
+ * @param float z
+ * @param bool genPath = false : generate a path to the destination
+ * @param bool forceDestination = false : force the exact destination
+ * @param int32 walkMode = -1 : -1 keeps the current mode, 0 runs, 1 walks
+ * @param float velocity = 0 : positive values override the selected mode's speed
+ * @param float finalAngle = -1 : non-negative values set the arrival orientation
+ */
+void TSUnit::MoveSplineTo(float x, float y, float z, bool genPath,
+    bool forceDestination, int32 walkMode, float velocity, float finalAngle)
+{
+    std::function<void(Movement::MoveSplineInit&)> initializer =
+        [=](Movement::MoveSplineInit& init)
+    {
+        init.MoveTo(x, y, z, genPath, forceDestination);
+        if (walkMode >= 0)
+            init.SetWalk(walkMode != 0);
+        if (velocity > 0.0f)
+            init.SetVelocity(velocity);
+        if (finalAngle >= 0.0f)
+            init.SetFacing(finalAngle);
+    };
+    unit->GetMotionMaster()->LaunchMoveSpline(
+        std::move(initializer), 0, MOTION_PRIORITY_NORMAL, POINT_MOTION_TYPE);
+}
+
 float TSUnit::GetRelativeAngle(float x, float y)
 {
     return unit->GetRelativeAngle(x,y);
@@ -2033,6 +2096,24 @@ void TSUnit::SendUnitSay(std::string const& msg,uint32 language)
 }
 
 /**
+ * Makes the [Unit] say a BroadcastText entry, localized independently for each
+ * receiver by the core. An optional target is included in the chat packet.
+ */
+void TSUnit::SendBroadcastTextSay(uint32 textId, TSWorldObject target)
+{
+    unit->Say(textId, target.obj);
+}
+
+/**
+ * Makes the [Unit] emit a BroadcastText text-emote, localized independently
+ * for each receiver by the core.
+ */
+void TSUnit::SendBroadcastTextEmote(uint32 textId, TSWorldObject target, bool bossEmote)
+{
+    unit->TextEmote(textId, target.obj, bossEmote);
+}
+
+/**
  * The [Unit] will yell the message
  *
  * @param string msg : message for the [Unit] to yell
@@ -2042,6 +2123,38 @@ void TSUnit::SendUnitYell(std::string const& msg,uint32 language)
 {
     if (msg.length() > 0)
         unit->Yell(msg, (Language)language, unit);
+}
+
+void TSUnit::SendBroadcastTextYell(uint32 textId, TSWorldObject target)
+{
+    unit->Yell(textId, target.obj);
+}
+
+void TSUnit::SendUnitSayToZone(std::string const& msg, uint32 language, uint32 zoneId)
+{
+    if (msg.empty() || !unit->IsInWorld())
+        return;
+
+    WorldPacket data;
+    ChatHandler::BuildChatPacket(data, CHAT_MSG_MONSTER_SAY, (Language)language, unit, unit, msg);
+    unit->GetMap()->SendZoneMessage(zoneId == 0 ? unit->GetZoneId() : zoneId, &data);
+}
+
+/**
+ * The [Unit] will yell the message to every player in a zone.
+ *
+ * @param string msg : message for the [Unit] to yell
+ * @param uint32 language : language for the [Unit] to speak
+ * @param uint32 zoneId = 0 : zone to receive the yell, or the [Unit]'s current zone when zero
+ */
+void TSUnit::SendUnitYellToZone(std::string const& msg, uint32 language, uint32 zoneId)
+{
+    if (msg.empty() || !unit->IsInWorld())
+        return;
+
+    WorldPacket data;
+    ChatHandler::BuildChatPacket(data, CHAT_MSG_MONSTER_YELL, (Language)language, unit, unit, msg);
+    unit->GetMap()->SendZoneMessage(zoneId == 0 ? unit->GetZoneId() : zoneId, &data);
 }
 
 /**
@@ -2059,6 +2172,11 @@ void TSUnit::DeMorph()
 void TSUnit::ClearInCombat()
 {
     unit->ClearInCombat();
+}
+
+void TSUnit::CombatStop(bool includingCast, bool mutualPvP)
+{
+    unit->CombatStop(includingCast, mutualPvP);
 }
 
 /**
@@ -2099,6 +2217,18 @@ void TSUnit::InterruptSpell(int spellType,bool delayed)
     }
 
     unit->InterruptSpell((CurrentSpellTypes)spellType, delayed);
+}
+
+void TSUnit::InterruptNonMeleeSpells(bool withDelayed, uint32 spellId, bool withInstant)
+{
+    unit->InterruptNonMeleeSpells(withDelayed, spellId, withInstant);
+}
+
+bool TSUnit::IsNonMeleeSpellCast(bool withDelayed, bool skipChanneled,
+    bool skipAutorepeat)
+{
+    return unit->IsNonMeleeSpellCast(
+        withDelayed, skipChanneled, skipAutorepeat, false, false);
 }
 
 /**

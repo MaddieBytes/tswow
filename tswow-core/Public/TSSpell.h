@@ -48,6 +48,7 @@ public:
     TSNumber<int32> GetCastTime();
     TSNumber<uint32> GetEntry();
     TSNumber<uint32> GetPowerCost();
+    TSNumber<uint32> GetPaidHealthCost();
     TSNumber<int32> GetDuration();
     TSNumber<uint32> GetGlyphSlot();
     TSNumber<uint32> GetState();

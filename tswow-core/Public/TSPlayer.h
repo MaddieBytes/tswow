@@ -81,6 +81,7 @@ public:
 	bool IsInSameGroupWith(TSPlayer target);
 	bool IsHonorOrXPTarget(TSUnit victim);
 	bool IsVisibleForPlayer(TSPlayer target);
+	void RefreshVisibility();
 	bool IsGMVisible();
 	bool IsTaxiCheater();
 	bool IsGMChat();
@@ -138,6 +139,8 @@ public:
 	TSNumber<uint16> GetReqKillOrCastCurrentCount(uint32 questId, int32 entry);
 	TSNumber<uint32> GetQuestLevel(TSQuest quest);
 	TSItem  GetEquippedItemBySlot(uint8 slot);
+	void SetVisibleItemSlot(uint8 slot, TSItem item);
+	void Transmogrify(uint8 slot, uint32 itemEntry);
 	TSNumber<float> GetRestBonus();
 	TSNumber<uint8> GetChatTag();
 	void SetBankBagSlotCount(uint8 count);

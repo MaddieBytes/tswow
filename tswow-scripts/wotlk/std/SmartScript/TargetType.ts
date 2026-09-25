@@ -160,9 +160,17 @@ export class TargetType {
 
     /**
      *  Just any random target on our threat list.
+     *  @param maxDist Maximum target distance, or 0 for no distance filter.
+     *  @param playerOnly Only select players.
+     *  @param powerType One-based Powers value, or 0 for any power type.
+     *  @param isInLos Require line of sight to the target.
      */
-    setHostileRandom() {
+    setHostileRandom(maxDist: number = 0, playerOnly: boolean = false, powerType: number = 0, isInLos: boolean = false) {
         this.row.target_type.set(5)
+        this.row.target_param1.set(maxDist)
+        this.row.target_param2.set(playerOnly ? 1 : 0)
+        this.row.target_param3.set(powerType)
+        this.row.target_param4.set(isInLos ? 1 : 0)
         return this.main
     }
 

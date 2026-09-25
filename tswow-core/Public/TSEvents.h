@@ -599,6 +599,14 @@ struct TSEvents
             , TSMutableNumber<uint32> rangedAttackPower
         )
         ID_EVENT(OnSendVendorItem, TSCreature vendor, TSItemTemplate item, TSPlayer player, TSMutable<bool,bool> shouldSend)
+        ID_EVENT(OnCanSeeForPlayer, TSCreature creature, TSPlayer player, TSMutable<bool,bool> canSee)
+        ID_EVENT(OnVendorRestockDelay, TSCreature vendor, TSItemTemplate item, TSNumber<uint32> activeSessions, TSMutableNumber<uint32> delay)
+        ID_EVENT(OnUpdateGuardianStats
+            , TSCreature creature
+            , TSNumber<uint32> stat
+            , TSMutableNumber<float> value
+            , TSMutableNumber<float> ownerBonus
+        )
         ID_EVENT(OnUpdateResistance
             , TSCreature
             , TSMutableNumber<float>

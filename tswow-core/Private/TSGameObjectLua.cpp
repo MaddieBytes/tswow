@@ -30,6 +30,7 @@ void TSLua::load_gameobject_methods(sol::state& state)
     LUA_FIELD(ts_gameobject, TSGameObject, SetLootState);
     LUA_FIELD(ts_gameobject, TSGameObject, SaveToDB);
     LUA_FIELD(ts_gameobject, TSGameObject, RemoveFromWorld);
+    LUA_FIELD(ts_gameobject, TSGameObject, Use);
     LUA_FIELD(ts_gameobject, TSGameObject, UseDoorOrButton);
     LUA_FIELD(ts_gameobject, TSGameObject, Respawn);
     LUA_FIELD(ts_gameobject, TSGameObject, SetRespawnTime);

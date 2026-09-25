@@ -117,6 +117,11 @@ TSNumber<uint32> TSSpell::GetPowerCost()
     return spell->GetPowerCost();
 }
 
+TSNumber<uint32> TSSpell::GetPaidHealthCost()
+{
+    return uint32(spell->m_tsEntity.m_json.GetNumber("tswow.paidHealthCost", 0));
+}
+
 /**
  * Returns the spell duration of the [Spell].
  *

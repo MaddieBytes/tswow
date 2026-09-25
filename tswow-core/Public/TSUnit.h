@@ -75,6 +75,8 @@ public:
     bool HasAuraType(uint32 auraType);
     bool IsCasting();
     bool HasUnitState(uint32 state);
+    bool CanReachWithMeleeAutoAttack(TSUnit target);
+    bool UpdateAllStats();
     bool HasUnitMovementFlag(uint32 flag);
     TSUnit  GetOwner();
     TSGUID GetOwnerGUID();
@@ -176,6 +178,7 @@ public:
     void SetRooted(bool apply);
     void SetConfused(bool apply);
     void SetFeared(bool apply);
+    bool SetVisible(bool visible);
     void ClearThreatList(bool apply, bool x);
     void Mount(uint32 displayId);
     void Dismount();
@@ -195,6 +198,9 @@ public:
     void MoveConfused();
     void MoveFleeing(TSUnit target, uint32 time);
     void MoveTo(uint32 id, float x, float y, float z, bool genPath, float finalAngle = 0);
+    void MoveSplineTo(float x, float y, float z, bool genPath = false,
+        bool forceDestination = false, int32 walkMode = -1, float velocity = 0,
+        float finalAngle = -1);
     float GetRelativeAngle(float x, float y);
     void MoveTakeoff(uint32 id, float x, float y, float z);
     void MoveLand(uint32 id, float x, float y, float z);
@@ -208,11 +214,20 @@ public:
     void SendUnitWhisper(std::string const& msg, uint32 lang, TSPlayer receiver, bool bossWhisper);
     void SendUnitEmote(std::string const& msg, TSUnit receiver, bool bossEmote);
     void SendUnitSay(std::string const& msg, uint32 language);
+    void SendBroadcastTextSay(uint32 textId, TSWorldObject target = TSWorldObject());
+    void SendBroadcastTextEmote(uint32 textId, TSWorldObject target = TSWorldObject(), bool bossEmote = false);
     void SendUnitYell(std::string const& msg, uint32 language);
+    void SendBroadcastTextYell(uint32 textId, TSWorldObject target = TSWorldObject());
+    void SendUnitSayToZone(std::string const& msg, uint32 language, uint32 zoneId = 0);
+    void SendUnitYellToZone(std::string const& msg, uint32 language, uint32 zoneId = 0);
     void DeMorph();
     void ClearInCombat();
+    void CombatStop(bool includingCast = false, bool mutualPvP = true);
     void StopSpellCast(uint32 spellId);
     void InterruptSpell(int spellType, bool delayed);
+    bool IsNonMeleeSpellCast(bool withDelayed = false, bool skipChanneled = false,
+        bool skipAutorepeat = false);
+    void InterruptNonMeleeSpells(bool withDelayed, uint32 spellId = 0, bool withInstant = true);
     TSAura AddAura(uint32 spell, TSUnit target);
     void RemoveAura(uint32 spellId);
     void RemoveAllAuras();

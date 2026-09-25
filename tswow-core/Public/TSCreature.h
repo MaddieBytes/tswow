@@ -84,6 +84,7 @@ public:
     TSPosition GetHomePosition();
     void SetHomePosition(float x, float y, float z, float o);
     TSUnit FindThreatListEntry(uint32 targetType, bool playerOnly, uint32 position, float dist, int32 aura);
+    TSUnit SelectLegacyAttackingTarget(uint32 targetType, uint32 position = 0, uint32 spellId = 0, uint32 selectFlags = 0x100);
     TSArray<TSUnit> GetThreatList();
     TSNumber<int> GetThreatListCount();
     TSNumber<uint32> GetNPCFlags();
@@ -98,7 +99,7 @@ public:
     void SetEquipmentSlots(uint32 main_hand, uint32 off_hand, uint32 ranged);
     void SetAggroEnabled(bool allow);
     void SetDisableReputationGain(bool disable);
-    void SetInCombatWithZone();
+    bool SetInCombatWithZone();
     void SetWanderRadius(float dist);
     void SetRespawnDelay(uint32 delay);
     void SetDefaultMovementType(int32 type);
@@ -109,11 +110,20 @@ public:
     void DespawnOrUnsummon(uint32 msTimeToDespawn);
     void Respawn();
     void RemoveCorpse();
+    TSNumber<uint32> GetDefaultGossipMenuID();
+    void SetDefaultGossipMenuID(uint32 menuId);
+    void ClearDefaultGossipMenuID();
     void MoveWaypoint();
     void CallAssistance();
     void CallForHelp(float radius);
     void FleeToGetAssistance();
+    bool TryFlee();
     void AttackStart(TSUnit target);
+    bool UpdateVictim();
+    bool IsTargetUnreachable(TSUnit target);
+    bool SetCombatMovement(bool enabled);
+    bool SetAutoAttackEnabled(bool enabled);
+    bool SetMainRangedSpellMode(bool enabled);
     void SetReactState(uint8 state);
     TSNumber<uint8> GetReactState();
     void SaveToDB();

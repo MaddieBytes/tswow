@@ -56,5 +56,5 @@ export function makeClassmask(classes: ClassMaskCon) {
         ? 0
         : (!Array.isArray(classes) ? [classes]:classes)
             .map(x=>resolveClassType(x))
-            .reduce((p,c)=>p|(1<<(c-1)),0);
+            .reduce((p,c)=>(p|(1<<(c-1)))>>>0,0);
 }
